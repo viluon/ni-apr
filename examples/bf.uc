@@ -30,18 +30,13 @@ read_code() {
 
     while (continue) {
         x = input;
-        // '\n'
-        if (x == 10) {
+        // EOI
+        if (x == -1) {
             continue = 0;
         } else {
-            // '\r'
-            if (x == 13) {
-                continue = 0;
-            } else {
-                code = list_append(code, x);
-                if (first == null) {
-                    first = code;
-                }
+            code = list_append(code, x);
+            if (first == null) {
+                first = code;
             }
         }
     }
