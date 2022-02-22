@@ -1,0 +1,6 @@
+#!/bin/sh
+
+IMAGE="fikovnik/microc"
+DIR="$(pwd)"
+
+docker run -ti --rm -v "$DIR:$DIR" -w "$DIR" "$IMAGE" "$@"

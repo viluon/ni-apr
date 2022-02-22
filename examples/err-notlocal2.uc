@@ -1,0 +1,8 @@
+f(){
+    return 17;
+}
+
+main(){
+    *f=10;
+    return 0;
+}
