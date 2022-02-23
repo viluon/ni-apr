@@ -191,7 +191,7 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
           | }
           |""".stripMargin
       )
-      , Left(ExecutionException("Nested records are not supported, use pointers", Loc(4, 8)))
+      , Left(ExecutionException("Nested records are not supported, use pointers", Loc(4, 19)))
     )
   }
 
