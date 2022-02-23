@@ -3,6 +3,7 @@ f(){
 }
 
 main(){
-    *f=10;
+    *f=10; // error: not a pointer
+
     return 0;
 }

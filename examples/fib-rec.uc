@@ -8,7 +8,7 @@ loop(a,b,n) {
       if (n == 1) {
         r = b;
       } else {
-        r = loop(b, a+b, n-1);
+        r = loop(b, a + b, n - 1);
       }
     } else {
       r = -1;
@@ -33,8 +33,8 @@ fib(n) {
 
 main() {
     var n, f, r;
-    n=input;
-    f=fib(n);
+    n = input;
+    f = fib(n);
     if (f.r == 0) {
       output f.f;
     }

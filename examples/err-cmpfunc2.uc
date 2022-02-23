@@ -8,8 +8,10 @@ g(i){
 
 main(){
     var n;
-    if( f==g ){
+
+    if (f == g) { // error: function comparison
         n=10;
     }
+
     return 0;
 }

@@ -1,4 +1,5 @@
 f(x) {
-var x, z;
-return 0;
+  var x, z; // error: identifier already declared
+
+  return 0;
 }

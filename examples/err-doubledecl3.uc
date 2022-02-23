@@ -3,6 +3,6 @@ f(){
     return 10;
 }
 
-f(){
+f(){ // error: identifier already declared
     return 4;
 }

@@ -7,6 +7,7 @@ g(){
 }
 
 main(){
-    f=g;
+    f = g; // error: assignment to a function
+
     return 0;
 }
