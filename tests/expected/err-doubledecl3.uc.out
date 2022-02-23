@@ -1,0 +1,5 @@
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/err-doubledecl3.uc:[6:1]: error: identifier 'f' already declared (1:1)
+  f(){ // error: identifier already declared
+  ^
+
+1

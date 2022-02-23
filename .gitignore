@@ -41,3 +41,6 @@ build
 #general
 *.class
 .attach_pid*
+
+# test outputs
+tests/actual/

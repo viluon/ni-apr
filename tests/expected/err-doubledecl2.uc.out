@@ -1,0 +1,5 @@
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/err-doubledecl2.uc:[2:7]: error: identifier 'x' already declared (1:3)
+    var x, z; // error: identifier already declared
+        ^
+
+1

@@ -1,0 +1,9 @@
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/err-notdecl.uc:[2:5]: error: identifier 'a' not declared
+      a = 5; // error: identifier not declared
+      ^
+
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/err-notdecl.uc:[4:12]: error: identifier 'a' not declared
+      return a; // error: identifier not declared
+             ^
+
+1

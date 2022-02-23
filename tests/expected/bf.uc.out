@@ -1,0 +1,5 @@
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/bf.uc:[32:13]: error: I/O error Non-integer input
+          x = input;
+              ^
+
+1

@@ -1,0 +1,5 @@
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/err-record1.uc:[5:19]: error: Nested records are not supported, use pointers
+      n = alloc {c: k, d: 4}; // error: nested records are not allowed
+                    ^
+
+1

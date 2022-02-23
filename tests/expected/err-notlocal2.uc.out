@@ -1,0 +1,5 @@
+/home/krikava/Teaching/FIT/NI-APR/2022/microc/tests/../examples/err-notlocal2.uc:[6:6]: error: Non-pointer (FunVal(f(){...}:1:1)) pointer dereference
+      *f=10; // error: not a pointer
+       ^
+
+1
