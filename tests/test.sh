@@ -2,7 +2,7 @@
 
 CUR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null && pwd)"
 BASE_DIR="$CUR_DIR/.."
-UC="$BASE_DIR/uc"
+UC=${UC:-"$BASE_DIR/uc"}
 EXAMPLES_DIR="$BASE_DIR/examples"
 ACTUALS_DIR="$BASE_DIR/tests/actual"
 EXPECTED_DIR="$BASE_DIR/tests/expected"
@@ -110,7 +110,6 @@ usage: $0 [options]
 Options:
   -h | -help        show this help
   --bootstrap       bootstrap the output
-  --docker          use 'uc-docker' instead of 'uc'
   --filter REGEX    only test cases that matches REGEX
 EOF
 }
@@ -120,10 +119,6 @@ while (( "$#" )); do
     -h|--help)
       usage
       exit 0
-      ;;
-    --docker)
-      UC="$BASE_DIR/uc-docker"
-      shift
       ;;
     --bootstrap)
       BOOTSTRAP=1
