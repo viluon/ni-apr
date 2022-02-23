@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 
-JAR_PATH="target/scala-2.13/microc.jar"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null && pwd)"
+JAR_PATH="$SCRIPT_DIR/target/scala-2.13/microc.jar"
 
 if [ ! -f "$JAR_PATH" ]; then
   echo "$JAR_PATH: does not exist, build the project first using 'sbt assembly'"
