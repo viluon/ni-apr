@@ -2,13 +2,11 @@ package microc.ast
 
 import microc.util.json._
 
-class JSONAstPrinter extends AstVisitor {
-  override def visit(node: AstNode): Unit = serialize(node)
-
+class JSONAstPrinter {
   def serialize(v: Any): JSON = v match {
     case xs: Iterable[_] => JSONArr(xs.map(serialize).toList)
-    case x: Product      => serializeProduct(x)
-    case x               => JSONStr(x.toString)
+    case x: Product => serializeProduct(x)
+    case x => JSONStr(x.toString)
   }
 
   protected def serializeProduct(that: Product): JSONObj = {

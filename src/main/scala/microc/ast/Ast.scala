@@ -57,6 +57,10 @@ case object GreatThan extends BinaryOperator {
 // BASE NODES
 // ----------------------------------------------------------------------------
 
+object AstNode {
+  private val Printer = new AstPrinter()
+}
+
 /**
   * An AST node
   */
@@ -73,12 +77,8 @@ sealed abstract class AstNode {
 
   def tree: Iterable[AstNode] = Iterable(this) ++ children.flatMap(_.tree)
 
-  def accept(visitor: AstVisitor): Unit = visitor.visit(this)
-
   override def toString: String = {
-    val printer = new AstPrinter()
-    accept(printer)
-    printer.result + s"[$loc]"
+    AstNode.Printer.print(this) + s"[$loc]"
   }
 }
 
@@ -272,8 +272,7 @@ case class VarStmt(decls: List[IdentifierDecl], loc: Loc) extends Stmt {
 
 case class IdentifierDecl(name: String, loc: Loc) extends Decl
 
-case class FunDecl(name: String, params: List[IdentifierDecl], block: FunBlockStmt, loc: Loc)
-    extends Decl {
+case class FunDecl(name: String, params: List[IdentifierDecl], block: FunBlockStmt, loc: Loc) extends Decl {
   override def toString: String = s"$name(${params.mkString(",")}){...}:$loc"
 
   override def children: Iterable[AstNode] = params :+ block

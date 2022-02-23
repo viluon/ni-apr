@@ -2,8 +2,6 @@ package microc
 
 import microc.analysis.Declarations
 
-import scala.collection.mutable
-
 package object ast {
 
   /**
@@ -36,26 +34,16 @@ package object ast {
       * @return a set of declarations that appear in the subtree starting by this node
       */
     def appearingIds(implicit declarations: Declarations): Set[Decl] = {
-      val ids = mutable.Set[Decl]()
-
-      val visitor = new DepthFirstAstVisitor[Unit] {
-        override def visit(node: AstNode, arg: Unit): Unit = {
-          node match {
-            case id: Identifier =>
-              id.declaration match {
-                case local: IdentifierDecl => ids += local
-                case fun: FunDecl          => ids += fun
-              }
-            case decl: IdentifierDecl => ids += decl
-            case fun: FunDecl         => ids += fun
-            case _                           =>
-          }
-          visitChildren(node, ())
+      def visit(node: AstNode): Set[Decl] = {
+        val ids: Set[Decl] = node match {
+          case x: Identifier => Set(x.declaration)
+          case x: Decl => Set(x)
+          case _ => Set.empty
         }
+        node.children.foldLeft(ids)((xs, x) => xs ++ visit(x))
       }
 
-      visitor.visit(node, ())
-      ids.toSet
+      visit(node)
     }
   }
 }
