@@ -121,6 +121,32 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
     )
   }
 
+  test("Assign to rvalue (int)") {
+    assertEquals(
+      analyze(
+        """
+          | f() {
+          |   3 = 3;
+          |   return 1;
+          | }
+          |""".stripMargin),
+      Left(List(SemanticError("cannot assign into rvalue 3[3:4]", Loc(3, 6))))
+    )
+  }
+
+  test("Assign to rvalue (record)") {
+    assertEquals(
+      analyze(
+        """
+          | f() {
+          |   {x:1}.x = 3;
+          |   return 1;
+          | }
+          |""".stripMargin),
+      Left(List(SemanticError("cannot assign into rvalue {x:1}.x[3:9]", Loc(3, 12))))
+    )
+  }
+
   // ------------------------------------------------------------------
   // HELPERS
   // ------------------------------------------------------------------
