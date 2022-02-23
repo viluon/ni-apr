@@ -11,7 +11,7 @@ import microc.cli.Reporter
   * @param loc the location of the error in the source
   */
 case class ParseException(message: String, loc: Loc) extends ProgramException(message) {
-  override def format(reporter: Reporter): String = reporter.formatError(message, loc)
+  override def format(reporter: Reporter): String = reporter.formatError("parse", message, loc)
 }
 
 object Parser {

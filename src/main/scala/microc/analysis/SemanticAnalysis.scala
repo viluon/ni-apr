@@ -13,7 +13,7 @@ case class SemanticError(msg: String, loc: Loc)
 
 case class SemanticException(errors: List[SemanticError]) extends ProgramException("Semantic exception") {
   override def format(reporter: Reporter): String =
-    errors.sortBy(_.loc).map(x => reporter.formatError(x.msg, x.loc)).mkString(NL)
+    errors.sortBy(_.loc).map(x => reporter.formatError("semantic", x.msg, x.loc)).mkString(NL)
 }
 
 /**

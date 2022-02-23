@@ -197,11 +197,11 @@ abstract class AbstractParserTest extends FunSuite {
     }
   }
 
-  protected def checkFail[T <: AstNode](code: String, expected: String)(implicit loc: Location,
-                                                                        tag: ClassTag[T]): Unit = {
+  protected def checkFail[T <: AstNode](code: String, expected: ParseException)(implicit loc: Location,
+                                                                                tag: ClassTag[T]): Unit = {
     check[T](code) {
-      case Success(_)                 => fail(s"Code '$code' should not parse")
-      case Failure(e: ParseException) => assertEquals(e.format(new Reporter(code)), expected)
+      case Success(_) => fail(s"Code '$code' should not parse")
+      case Failure(e: ParseException) => assertEquals(e, expected)
     }
   }
 }

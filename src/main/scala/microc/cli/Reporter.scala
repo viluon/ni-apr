@@ -7,8 +7,8 @@ import scala.annotation.tailrec
 class Reporter(source: String, fileName: Option[String] = None) {
   val prefix = fileName.map(_ + ":").getOrElse("")
 
-  def formatError(message: String, loc: Loc): String =
-    s"""$prefix[$loc]: error: $message
+  def formatError(kind: String, message: String, loc: Loc): String =
+    s"""$prefix[$loc]: $kind error: $message
        |  ${lineContent(loc.line)}
        |  ${" " * (loc.col - 1)}^
        |""".stripMargin
