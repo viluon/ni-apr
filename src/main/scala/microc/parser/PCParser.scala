@@ -155,7 +155,8 @@ class PCParser extends StringParsers with microc.parser.Parser {
 
   lazy val Program: Parser[ast.Program] =
     FunDecl.* ^^ { funs =>
-      ast.Program(funs, Loc(1, 1))
+      val startLoc = Loc(1, 1)
+      ast.Program(funs, ast.Span(startLoc, funs.lastOption.map(_.span.to).getOrElse(startLoc)))
     }
 
   // ----------------------------------------------------------------------------
@@ -165,8 +166,11 @@ class PCParser extends StringParsers with microc.parser.Parser {
   // ignores whitespace, single line comment (// ...) and multiline comments (/* ... */)
   override protected val whiteSpaceRegex: Option[Regex] = Some("""\s*(?>/(/[^\r\n]*|(?s:\*((?!\*/).)*\*/)))\s*|\s+""".r)
 
-  // converts current parser position into the ast.Loc class
-  private lazy val C: Parser[ast.Loc] = cursor ^^ (x => Loc(x.line, x.col))
+  // converts current parser position into the ast.Span class
+  private lazy val C: Parser[ast.Span] = cursor ^^ (x => {
+    val loc = Loc(x.line, x.col)
+    ast.Span(loc, loc)
+  })
 
   private def binaryOp(op: ast.BinaryOperator): Parser[(ast.Expr, ast.Expr) => ast.BinaryOp] =
     C <~ op.toString ^^ { loc => (left, right) =>
@@ -180,7 +184,8 @@ class PCParser extends StringParsers with microc.parser.Parser {
         // handleWhiteSpace is only called before a parser,
         // not to move the cursor so we can know when to backtrack
         val rem2 = handleWhiteSpace(rem)
-        throw ParseException(msg, Loc(rem2.pos.line, rem2.pos.col))
+        val loc = Loc(rem2.pos.line, rem2.pos.col)
+        throw ParseException(msg, ast.Span(loc, loc))
     }
 
   override def parseProgram(source: String): ast.Program = doParse(source, Program)

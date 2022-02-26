@@ -15,6 +15,21 @@ case class Loc(line: Int, col: Int) extends Ordered[Loc] {
   }
 }
 
+case class Span(from: Loc, to: Loc, highlight: Option[Span] = None) extends Ordered[Span] {
+  override def toString: String = s"$from-$to"
+
+  override def compare(that: Span): Int = {
+    val d = this.from.compare(that.from)
+    if (d == 0) this.to.compare(that.to) else d
+  }
+
+  def ++(other: Span): Span = other match {
+    case Span(_, to, hl) => Span(from, to, highlight.orElse(hl))
+  }
+
+  def highlighting(hl: Span): Span = copy(highlight = Some(hl))
+}
+
 /** A binary operator */
 sealed trait BinaryOperator
 
@@ -71,14 +86,14 @@ sealed abstract class AstNode {
     *
     * @return a source code location.
     */
-  def loc: Loc
+  def span: Span
 
   def children: Iterable[AstNode] = Iterable.empty
 
   def tree: Iterable[AstNode] = Iterable(this) ++ children.flatMap(_.tree)
 
   override def toString: String = {
-    AstNode.Printer.print(this) + s"[$loc]"
+    AstNode.Printer.print(this) + s"[$span]"
   }
 }
 
@@ -101,17 +116,17 @@ sealed trait StmtInNestedBlock extends Stmt
 // EXPRESSIONS
 // ----------------------------------------------------------------------------
 
-case class Null(loc: Loc) extends Expr
+case class Null(span: Span) extends Expr
 
-case class Number(value: Int, loc: Loc) extends Expr
+case class Number(value: Int, span: Span) extends Expr
 
-case class Identifier(name: String, loc: Loc) extends Expr
+case class Identifier(name: String, span: Span) extends Expr
 
-case class BinaryOp(operator: BinaryOperator, left: Expr, right: Expr, loc: Loc) extends Expr {
+case class BinaryOp(operator: BinaryOperator, left: Expr, right: Expr, span: Span) extends Expr {
   override def children: Iterable[AstNode] = List(left, right)
 }
 
-case class CallFuncExpr(targetFun: Expr, args: List[Expr], loc: Loc) extends Expr {
+case class CallFuncExpr(targetFun: Expr, args: List[Expr], span: Span) extends Expr {
   override def children: Iterable[AstNode] = targetFun :: args
 }
 
@@ -120,9 +135,9 @@ case class CallFuncExpr(targetFun: Expr, args: List[Expr], loc: Loc) extends Exp
   *
   * @param loc The source code location.
   */
-case class Input(loc: Loc) extends Expr
+case class Input(span: Span) extends Expr
 
-case class Alloc(expr: Expr, loc: Loc) extends Expr {
+case class Alloc(expr: Expr, span: Span) extends Expr {
   override def children: Iterable[AstNode] = List(expr)
 }
 
@@ -134,7 +149,7 @@ case class Alloc(expr: Expr, loc: Loc) extends Expr {
   * @param id  The target variable.
   * @param loc The source code location.
   */
-case class VarRef(id: Identifier, loc: Loc) extends Expr {
+case class VarRef(id: Identifier, span: Span) extends Expr {
   override def children: Iterable[AstNode] = List(id)
 }
 
@@ -146,15 +161,15 @@ case class VarRef(id: Identifier, loc: Loc) extends Expr {
   * @param pointer The pointer to dereference
   * @param loc The source code location
   */
-case class Deref(pointer: Expr, loc: Loc) extends Expr {
+case class Deref(pointer: Expr, span: Span) extends Expr {
   override def children: Iterable[AstNode] = List(pointer)
 }
 
-case class Record(fields: List[RecordField], loc: Loc) extends Expr {
+case class Record(fields: List[RecordField], span: Span) extends Expr {
   override def children: Iterable[AstNode] = fields.map(_.expr)
 }
 
-case class RecordField(name: String, expr: Expr, loc: Loc) extends AstNode {
+case class RecordField(name: String, expr: Expr, span: Span) extends AstNode {
   override def children: Iterable[AstNode] = List(expr)
 }
 
@@ -165,7 +180,7 @@ case class RecordField(name: String, expr: Expr, loc: Loc) extends AstNode {
   * @param field  The name of the field of the record.
   * @param loc    The source code location.
   */
-case class FieldAccess(record: Expr, field: String, loc: Loc) extends Expr {
+case class FieldAccess(record: Expr, field: String, span: Span) extends Expr {
   override def children: Iterable[AstNode] = List(record)
 }
 
@@ -180,34 +195,34 @@ case class FieldAccess(record: Expr, field: String, loc: Loc) extends Expr {
   * @param right The RValue (what to assign)
   * @param loc   The source code location
   */
-case class AssignStmt(left: Expr, right: Expr, loc: Loc) extends StmtInNestedBlock {
+case class AssignStmt(left: Expr, right: Expr, span: Span) extends StmtInNestedBlock {
   override def children: Iterable[AstNode] = List(left, right)
 }
 
 case object DirectWrite {
-  def unapply(expr: Expr): Option[(Identifier, Loc)] = expr match {
-    case x: Identifier => Some(x, x.loc)
+  def unapply(expr: Expr): Option[(Identifier, Span)] = expr match {
+    case x: Identifier => Some(x, x.span)
     case _             => None
   }
 }
 
 case object IndirectWrite {
-  def unapply(expr: Expr): Option[(Expr, Loc)] = expr match {
+  def unapply(expr: Expr): Option[(Expr, Span)] = expr match {
     case Deref(e, l) => Some(e, l)
     case _           => None
   }
 }
 
 case object DirectFieldWrite {
-  def unapply(expr: Expr): Option[(Identifier, String, Loc)] = expr match {
-    case FieldAccess(record: Identifier, field, loc) => Some((record, field, loc))
+  def unapply(expr: Expr): Option[(Identifier, String, Span)] = expr match {
+    case FieldAccess(record: Identifier, field, span) => Some((record, field, span))
     case _                                           => None
   }
 }
 
 case object IndirectFieldWrite {
-  def unapply(expr: Expr): Option[(Expr, String, Loc)] = expr match {
-    case FieldAccess(Deref(record, _), field, loc) => Some((record, field, loc))
+  def unapply(expr: Expr): Option[(Expr, String, Span)] = expr match {
+    case FieldAccess(Deref(record, _), field, span) => Some((record, field, span))
     case _                                         => None
   }
 }
@@ -237,26 +252,26 @@ object Block {
   * @param body The list of statements in this block
   * @param loc The location
   */
-case class NestedBlockStmt(body: List[StmtInNestedBlock], loc: Loc) extends Block with StmtInNestedBlock
+case class NestedBlockStmt(body: List[StmtInNestedBlock], span: Span) extends Block with StmtInNestedBlock
 
-case class FunBlockStmt(vars: List[VarStmt], stmts: List[StmtInNestedBlock], ret: ReturnStmt, loc: Loc) extends Block {
+case class FunBlockStmt(vars: List[VarStmt], stmts: List[StmtInNestedBlock], ret: ReturnStmt, span: Span) extends Block {
   val body: List[Stmt] = vars ++ (stmts :+ ret)
 }
 
-case class ReturnStmt(expr: Expr, loc: Loc) extends Stmt {
+case class ReturnStmt(expr: Expr, span: Span) extends Stmt {
   override def children: Iterable[AstNode] = List(expr)
 }
 
-case class IfStmt(guard: Expr, thenBranch: StmtInNestedBlock, elseBranch: Option[StmtInNestedBlock], loc: Loc)
+case class IfStmt(guard: Expr, thenBranch: StmtInNestedBlock, elseBranch: Option[StmtInNestedBlock], span: Span)
     extends StmtInNestedBlock {
   override def children: Iterable[AstNode] = guard :: thenBranch :: elseBranch.map(x => List(x)).getOrElse(Nil)
 }
 
-case class WhileStmt(guard: Expr, block: StmtInNestedBlock, loc: Loc) extends StmtInNestedBlock {
+case class WhileStmt(guard: Expr, block: StmtInNestedBlock, span: Span) extends StmtInNestedBlock {
   override def children: Iterable[AstNode] = List(guard, block)
 }
 
-case class OutputStmt(expr: Expr, loc: Loc) extends StmtInNestedBlock {
+case class OutputStmt(expr: Expr, span: Span) extends StmtInNestedBlock {
   override def children: Iterable[AstNode] = List(expr)
 }
 
@@ -266,14 +281,14 @@ case class OutputStmt(expr: Expr, loc: Loc) extends StmtInNestedBlock {
   * @param decls The list of variable declarations.
   * @param loc   The source code location.
   */
-case class VarStmt(decls: List[IdentifierDecl], loc: Loc) extends Stmt {
+case class VarStmt(decls: List[IdentifierDecl], span: Span) extends Stmt {
   override def children: Iterable[AstNode] = decls
 }
 
-case class IdentifierDecl(name: String, loc: Loc) extends Decl
+case class IdentifierDecl(name: String, span: Span) extends Decl
 
-case class FunDecl(name: String, params: List[IdentifierDecl], block: FunBlockStmt, loc: Loc) extends Decl {
-  override def toString: String = s"$name(${params.mkString(",")}){...}:$loc"
+case class FunDecl(name: String, params: List[IdentifierDecl], block: FunBlockStmt, span: Span) extends Decl {
+  override def toString: String = s"$name(${params.mkString(",")}){...}:$span"
 
   override def children: Iterable[AstNode] = params :+ block
 }
@@ -287,7 +302,7 @@ case class FunDecl(name: String, params: List[IdentifierDecl], block: FunBlockSt
   * @param funs The list of functions.
   * @param loc  The source code location.
   */
-case class Program(funs: List[FunDecl], loc: Loc) extends AstNode {
+case class Program(funs: List[FunDecl], span: Span) extends AstNode {
   def mainFunOption: Option[FunDecl] =
     funs.find(_.name == "main")
 

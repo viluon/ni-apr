@@ -65,19 +65,19 @@ abstract class AbstractParserTest extends FunSuite {
       assertEquals(
         v,
         IfStmt(
-          Identifier("a", Loc(1, 5)),
+          Identifier("a", Span(Loc(1, 5), Loc(1, 5))),
           IfStmt(
-            Identifier("b", Loc(1, 12)),
-            AssignStmt(Identifier("c", Loc(1, 15)), Number(1, Loc(1, 19)), Loc(1, 17)),
+            Identifier("b", Span(Loc(1, 12), Loc(1, 12))),
+            AssignStmt(Identifier("c", Span(Loc(1, 15), Loc(1, 15))), Number(1, Span(Loc(1, 19), Loc(1, 19))), Span(Loc(1, 17), Loc(1, 17))),
             Some(
-              AssignStmt(Identifier("d", Loc(1, 27)), Number(2, Loc(1, 31)), Loc(1, 29)),
+              AssignStmt(Identifier("d", Span(Loc(1, 27), Loc(1, 27))), Number(2, Span(Loc(1, 31), Loc(1, 31))), Span(Loc(1, 29), Loc(1, 29))),
             ),
-            Loc(1, 8)
+            Span(Loc(1, 8), Loc(1, 32))
           ),
           Some(
-            AssignStmt(Identifier("e", Loc(1, 39)), Number(3, Loc(1, 43)), Loc(1, 41))
+            AssignStmt(Identifier("e", Span(Loc(1, 39), Loc(1, 39))), Number(3, Span(Loc(1, 43), Loc(1, 43))), Span(Loc(1, 41), Loc(1, 41)))
           ),
-          Loc(1, 1)
+          Span(Loc(1, 1), Loc(1, 1))
         )
       )
   }
@@ -86,7 +86,7 @@ abstract class AbstractParserTest extends FunSuite {
     case Success(v) =>
       assertEquals(
         v,
-        NestedBlockStmt(List(NestedBlockStmt(Nil, Loc(1, 2))), Loc(1, 1))
+        NestedBlockStmt(List(NestedBlockStmt(Nil, Span(Loc(1, 2), Loc(1, 2)))), Span(Loc(1, 1), Loc(1, 1)))
       )
   }
 
@@ -98,13 +98,13 @@ abstract class AbstractParserTest extends FunSuite {
           List(
             NestedBlockStmt(
               List(
-                NestedBlockStmt(Nil, Loc(1, 3)),
-                NestedBlockStmt(Nil, Loc(1, 5))
+                NestedBlockStmt(Nil, Span(Loc(1, 3), Loc(1, 3))),
+                NestedBlockStmt(Nil, Span(Loc(1, 5), Loc(1, 5)))
               ),
-              Loc(1, 2)
+              Span(Loc(1, 2), Loc(1, 2))
             )
           ),
-          Loc(1, 1)
+          Span(Loc(1, 1), Loc(1, 1))
         )
       )
   }
@@ -155,17 +155,17 @@ abstract class AbstractParserTest extends FunSuite {
         Plus,
         BinaryOp(
           Plus,
-          Number(1, Loc(1, 1)),
+          Number(1, Span(Loc(1, 1), Loc(1, 1))),
           BinaryOp(
             Times,
-            BinaryOp(Times, Number(2, Loc(1, 5)), Number(3, Loc(1, 9)), Loc(1, 7)),
-            Number(4, Loc(1, 13)),
-            Loc(1, 11)
+            BinaryOp(Times, Number(2, Span(Loc(1, 5), Loc(1, 5))), Number(3, Span(Loc(1, 9), Loc(1, 9))), Span(Loc(1, 7), Loc(1, 7))),
+            Number(4, Span(Loc(1, 13), Loc(1, 13))),
+            Span(Loc(1, 11), Loc(1, 11))
           ),
-          Loc(1, 3)
+          Span(Loc(1, 3), Loc(1, 3))
         ),
-        Number(5, Loc(1, 17)),
-        Loc(1, 15)
+        Number(5, Span(Loc(1, 17), Loc(1, 17))),
+        Span(Loc(1, 15), Loc(1, 15))
       )
 
     assertEquals(actual, expected)

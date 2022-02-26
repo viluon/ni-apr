@@ -17,8 +17,8 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
     )
 
     assertEquals(ds.size, 2)
-    assertEquals(ds(Identifier("x", Loc(4, 4))), IdentifierDecl("x", Loc(3, 8)))
-    assertEquals(ds(Identifier("x", Loc(5, 11))), IdentifierDecl("x", Loc(3, 8)))
+    assertEquals(ds(Identifier("x", Span(Loc(4, 4), Loc(4, 4)))), IdentifierDecl("x", Span(Loc(3, 8), Loc(3, 8))))
+    assertEquals(ds(Identifier("x", Span(Loc(5, 11), Loc(5, 11)))), IdentifierDecl("x", Span(Loc(3, 8), Loc(3, 8))))
   }
 
   test("Identifier redefinition (function, function)") {
@@ -32,7 +32,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
         |   return 2;
         | }
         |""".stripMargin),
-      Left(List(SemanticError("identifier 'f' already declared (2:2)", Loc(6, 2))))
+      Left(List(SemanticError("identifier 'f' already declared (2:2)", Span(Loc(6, 2), Loc(6, 2)))))
     )
   }
 
@@ -49,7 +49,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'f' already declared (2:2)", Loc(7, 8))))
+      Left(List(SemanticError("identifier 'f' already declared (2:2)", Span(Loc(7, 8), Loc(7, 8)))))
     )
   }
 
@@ -62,7 +62,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'x' already declared (3:8)", Loc(3, 12))))
+      Left(List(SemanticError("identifier 'x' already declared (3:8)", Span(Loc(3, 12), Loc(3, 12)))))
     )
   }
 
@@ -75,7 +75,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'x' already declared (2:4)", Loc(3, 10))))
+      Left(List(SemanticError("identifier 'x' already declared (2:4)", Span(Loc(3, 10), Loc(3, 10)))))
     )
   }
 
@@ -89,7 +89,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'y' not declared", Loc(4, 4))))
+      Left(List(SemanticError("identifier 'y' not declared", Span(Loc(4, 4), Loc(4, 4)))))
     )
   }
 
@@ -103,7 +103,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("duplicate field name 'a'", Loc(4, 21))))
+      Left(List(SemanticError("duplicate field name 'a'", Span(Loc(4, 21), Loc(4, 21)))))
     )
   }
 
@@ -117,7 +117,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign to a function", Loc(4, 6))))
+      Left(List(SemanticError("cannot assign to a function", Span(Loc(4, 6), Loc(4, 6)))))
     )
   }
 
@@ -130,7 +130,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign into rvalue 3[3:4]", Loc(3, 6))))
+      Left(List(SemanticError("cannot assign into rvalue 3[3:4]", Span(Loc(3, 6), Loc(3, 6)))))
     )
   }
 
@@ -143,7 +143,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign into rvalue {x:1}.x[3:9]", Loc(3, 12))))
+      Left(List(SemanticError("cannot assign into rvalue {x:1}.x[3:9]", Span(Loc(3, 12), Loc(3, 12)))))
     )
   }
 

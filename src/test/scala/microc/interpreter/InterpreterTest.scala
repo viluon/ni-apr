@@ -1,6 +1,6 @@
 package microc.interpreter
 
-import microc.ast.Loc
+import microc.ast.{Loc, Span}
 import microc.util.CharacterSets.NL
 import microc.{Examples, Parsing}
 import munit.FunSuite
@@ -176,7 +176,7 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
           |   return r.b;
           | }
           |""".stripMargin),
-      Left(ExecutionException("Non-existing field (b) access in {a:1}", Loc(5, 5)))
+      Left(ExecutionException("Non-existing field (b) access in {a:1}", Span(Loc(5, 5), Loc(5, 5))))
     )
   }
 
@@ -191,7 +191,7 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
           | }
           |""".stripMargin
       )
-      , Left(ExecutionException("Nested records are not supported, use pointers", Loc(4, 19)))
+      , Left(ExecutionException("Nested records are not supported, use pointers", Span(Loc(4, 19), Loc(4, 19))))
     )
   }
 

@@ -1,17 +1,19 @@
 package microc.cli
 
-import microc.ast.Loc
+import microc.ast.{Loc, Span}
 
 import scala.annotation.tailrec
 
 class Reporter(source: String, fileName: Option[String] = None) {
   val prefix = fileName.map(_ + ":").getOrElse("")
 
-  def formatError(kind: String, message: String, loc: Loc): String =
+  def formatError(kind: String, message: String, span: Span): String = {
+    val loc = span.from
     s"""$prefix[$loc]: $kind error: $message
        |  ${lineContent(loc.line)}
        |  ${" " * (loc.col - 1)}^
        |""".stripMargin
+  }
 
   private def lineContent(line: Int): String = {
     @tailrec def loop(idx: Int, lastLine: Int, rem: Int): String = {
