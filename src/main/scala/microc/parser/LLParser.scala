@@ -230,7 +230,7 @@ class InternalLLParser(source: String, tokens: List[Token]) {
     case x if x.typ == MINUS =>
       // we do not have unary minus
       val num = consume(NUMBER, "expected a number")
-      ast.Number(-num.value.toInt, x.span)
+      ast.Number(-num.value.toInt, (x.span ++ num.span).highlighting(x.span))
     case x =>
       error(s"expected number, got '${x.value}'", x)
   }
@@ -245,9 +245,10 @@ class InternalLLParser(source: String, tokens: List[Token]) {
 
   // Paren = '(' Expr ')'
   def Paren(): ast.Expr = {
-    consume(LPAREN, "expected '('")
+    val open = consume(LPAREN, "expected '('")
     val expr = Expr()
-    consume(RPAREN, "expected ')' after expression")
+    val close = consume(RPAREN, "expected ')' after expression")
+    expr.span = open.span ++ close.span
     expr
   }
 
@@ -276,14 +277,14 @@ class InternalLLParser(source: String, tokens: List[Token]) {
   def PostfixExpr(): ast.Expr = {
     @tailrec def loop(expr: ast.Expr): ast.Expr = peekType match {
       case DOT =>
-        val op = advance()
+        val dot = advance()
         val id = Identifier()
-        loop(ast.FieldAccess(expr, id.name, op.span ++ id.span))
+        loop(ast.FieldAccess(expr, id.name, (expr.span ++ id.span).highlighting(dot.span ++ id.span)))
       case LPAREN =>
-        val op = advance()
+        val open = advance()
         val args = repsep(Expr(), COMMA, RPAREN)
         val close = consume(RPAREN, "Expected ')' after call")
-        loop(ast.CallFuncExpr(expr, args, op.span ++ close.span))
+        loop(ast.CallFuncExpr(expr, args, (expr.span ++ close.span).highlighting(open.span ++ close.span)))
       case _ =>
         expr
     }
@@ -300,16 +301,19 @@ class InternalLLParser(source: String, tokens: List[Token]) {
   def UnaryExpr(): ast.Expr = peekType match {
     case STAR =>
       val t = advance()
-      ast.Deref(UnaryExpr(), t.span)
+      val unExp = UnaryExpr()
+      ast.Deref(unExp, t.span ++ unExp.span)
     case AND =>
       val t = advance()
-      ast.VarRef(Identifier(), t.span)
+      val id = Identifier()
+      ast.VarRef(id, t.span ++ id.span)
     case INPUT =>
       val t = advance()
       ast.Input(t.span)
     case ALLOC =>
       val t = advance()
-      ast.Alloc(Expr(), t.span)
+      val exp = Expr()
+      ast.Alloc(exp, t.span ++ exp.span)
     case NULL =>
       val t = advance()
       ast.Null(t.span)
@@ -334,10 +338,10 @@ class InternalLLParser(source: String, tokens: List[Token]) {
   // AssignmentStmt = Expr '=' Expr ';'
   def AssignmentStmt(): ast.AssignStmt = {
     val left = Expr()
-    val op = consume(EQUAL, "expected '='")
+    consume(EQUAL, "expected '='")
     val right = Expr()
-    consume(SEMICOLON, "expected ';' after assignment")
-    ast.AssignStmt(left, right, left.span ++ right.span)
+    val semi = consume(SEMICOLON, "expected ';' after assignment")
+    ast.AssignStmt(left, right, left.span ++ semi.span)
   }
 
   // OutputStmt = 'output' Expr ';'
@@ -355,7 +359,7 @@ class InternalLLParser(source: String, tokens: List[Token]) {
     val guard = Expr()
     consume(RPAREN, "expected ')' after expression")
     val body = Stmt()
-    ast.WhileStmt(guard, body, op.span ++ body.span)
+    ast.WhileStmt(guard, body, (op.span ++ body.span).highlighting(op.span ++ guard.span))
   }
 
   // IfStmt = 'if' '(' Expr ')' Stmt [ 'else' Stmt ]

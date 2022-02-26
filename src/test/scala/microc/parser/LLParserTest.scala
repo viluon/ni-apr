@@ -8,7 +8,7 @@ class LLParserTest extends AbstractParserTest {
   checkFail[Stmt](
     """|return = 1;
        |""".stripMargin,
-    ParseException("expected expression, got 'return'", Span(Loc(1, 1), Loc(1, 1)))
+    ParseException("expected expression, got 'return'", Span(Loc(1, 1), Loc(1, 6)))
   )
 
   checkFail[Program](
@@ -46,6 +46,6 @@ class LLParserTest extends AbstractParserTest {
        |  return 1;
        |}
        |""".stripMargin,
-    ParseException("expected identifier, got 'return'", Span(Loc(3, 3), Loc(3, 3)))
+    ParseException("expected identifier, got 'return'", Span(Loc(3, 3), Loc(3, 8)))
   )
 }
