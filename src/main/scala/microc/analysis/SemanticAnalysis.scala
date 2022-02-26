@@ -33,5 +33,5 @@ case class SemanticException(errors: List[SemanticError]) extends ProgramExcepti
 class SemanticAnalysis {
   type Env = Map[String, Decl]
 
-  def analyze(program: Program): Declarations = ???
+  def analyze(program: Program): Declarations = Map() // TODO
 }

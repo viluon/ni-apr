@@ -40,7 +40,7 @@ object BinaryOperator {
     case "*"  => Times
     case "/"  => Divide
     case "==" => Equal
-    case ">"  => GreatThan
+    case ">"  => LessThan
   }
 }
 
@@ -64,7 +64,7 @@ case object Equal extends BinaryOperator {
   override def toString: String = "=="
 }
 
-case object GreatThan extends BinaryOperator {
+case object LessThan extends BinaryOperator {
   override def toString: String = ">"
 }
 
