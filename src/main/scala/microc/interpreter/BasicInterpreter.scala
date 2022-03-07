@@ -14,8 +14,6 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
   type Env = Map[Identifier, Int]
   type Heap = Array[Value]
 
-  case class InterpreterState(heap: Heap, env: Env)
-
   // help type inference
   def get: Context[InterpreterState] = _get
   def crash[A](e: String, sp: Span): Context[A] = _crash((e, sp))
@@ -23,8 +21,10 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
 
   def heap: Context[Heap] = for (InterpreterState(heap, _) <- get) yield heap
   def env: Context[Env] = for (InterpreterState(_, env) <- get) yield env
-  def setHeap(heap: Heap): Context[Unit] = for (s <- get) yield put(s.copy(heap = heap))
-  def setEnv(env: Env): Context[Unit] = for (s <- get) yield put(s.copy(env = env))
+  // replacing flatMap with map in the definitions below surprisingly typechecks
+  // took me 2 hours to track down
+  def setHeap(heap: Heap): Context[Unit] = get.flatMap(s => put(s.copy(heap = heap)))
+  def setEnv(env: Env): Context[Unit] = get.flatMap(s => put(s.copy(env = env)))
 
   def deref(v: Value): Context[Option[Either[Option[FunDecl], Value]]] = v match {
     case AddrVal(addr) => for (h <- heap) yield Some(Right(h(addr)))
@@ -37,13 +37,13 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
     case _ => pure(None)
   }
 
-  def alloc(obj: Value): Context[Int] = for (h <- heap; _ <- setHeap(h :+ obj)) yield h.length
-  def bind(id: Identifier, addr: Int): Context[Unit] = for (e <- env; _ <- setEnv(e + ((id, addr)))) yield ()
-  def lookup(id: Identifier): Context[Value] = env.flatMap(_.get(id) match {
+  def alloc(obj: Value): Context[Int] = for (h <- heap; () <- setHeap(h :+ obj); () <- pure(())) yield h.length
+  def bind(id: Identifier, addr: Int): Context[Unit] = for (e <- env; () <- setEnv(e + ((id, addr))); () <- pure(())) yield ()
+  def lookup(id: Identifier): Context[Value] = env.flatMap(e => e.get(id) match {
     case Some(addr) => for (h <- heap) yield h(addr)
     case None => program.declarations.find(_.name == id.name) match {
       case Some(decl) => decl match {
-        case IdentifierDecl(_, _) => throw new IllegalStateException("accessing an unallocated variable")
+        case IdentifierDecl(_, _) => throw new IllegalStateException(s"accessing an unallocated variable $id")
         case FunDecl(name, _, _, _) => pure(FunAddrVal(name))
       }
       case None => crash(s"undefined ${id.name}", id.span)
@@ -51,10 +51,49 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
   })
 
   def eval(stmt: Stmt): Context[Value] = stmt match {
-    case block: StmtInNestedBlock => ???
-    case block: Block => ???
+    case block: StmtInNestedBlock => block match {
+      case AssignStmt(left, right, span) => for (
+        l <- eval(left);
+        addr <- l match {
+          case AddrVal(addr) => pure(addr)
+          case _ => ???
+        };
+        r <- eval(right);
+        h <- heap;
+        () <- setHeap(h.updated(addr, r));
+        nh <- heap
+      ) yield { println(nh.mkString("Array(", ", ", ")")); NullVal }
+      case NestedBlockStmt(body, span) => body.foldLeft(pure(NullVal: Value)) {
+        case (ctx, stmt) => ctx.flatMap(_ => eval(stmt))
+      }
+      case IfStmt(guard, thenBranch, elseBranch, span) => for (
+        condition <- eval(guard);
+        result <- eval(if (condition.truthy) thenBranch else elseBranch.getOrElse(???))
+      ) yield result
+      case WhileStmt(guard, block, span) => ???
+      case OutputStmt(expr, span) => ???
+    }
+    case block: Block => block match {
+      case NestedBlockStmt(body, span) => ???
+      case FunBlockStmt(vars, stmts, ret, span) => ???
+    }
     case ReturnStmt(expr, span) => eval(expr)
-    case VarStmt(decls, span) => ???
+    case VarStmt(decls, span) =>
+      // allocate variables
+      for (
+        () <- reduce(decls) { case IdentifierDecl(name, span) =>
+          alloc(NullVal).flatMap(addr => bind(Identifier(name, span), addr))
+        };
+//        () <- decls.foldLeft(pure(())) { case (ctx, IdentifierDecl(name, span)) =>
+//          ctx.flatMap(_ => alloc(NullVal).flatMap(addr => bind(Identifier(name, span), addr)))
+//        };
+//        () <- bind(Identifier("oof", span), 9);
+//        0 <- alloc(NullVal);
+//        () <- put(InterpreterState(Array(IntVal(3)), Map(Identifier("x", span) -> 9))): Context[Unit];
+        ne <- env;
+        nh <- heap;
+        () <- pure(())
+      ) yield { println("from varstmt:", ne, nh.mkString("Array(", ", ", ")")); NullVal }
   }
 
   def eval(expr: Expr): Context[Value] = expr match {
@@ -64,7 +103,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
     case BinaryOp(operator, left, right, _) => evalBinOp(operator, left, right)
     case CallFuncExpr(targetFun, argExprs, span) => evalCall(targetFun, argExprs, span)
     case Input(_) => ???
-    case Alloc(expr, _) => for (v <- eval(expr); addr <- alloc(v)) yield IntVal(addr)
+    case Alloc(expr, _) => for (v <- eval(expr); addr <- alloc(v)) yield AddrVal(addr)
     case VarRef(id, _) => for (e <- env) yield AddrVal(e(id))
     case Deref(pointer, span) => (for (addr <- eval(pointer); v <- deref(addr)) yield v match {
       case Some(Right(value)) => pure(value)
@@ -86,7 +125,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
             case (soFar, argExp) => for (xs <- soFar; x <- eval(argExp)) yield x :: xs
           };
           v <- call(decl, args);
-          _ <- setEnv(originalEnv)
+          () <- setEnv(originalEnv)
         ) yield v
         case None => crash(s"attempt to call undefined function $fnAddr", span.highlighting(targetFun.span))
       }
@@ -95,7 +134,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
   }.flatten
 
   def reduce[A](xs: Iterable[A])(f: A => Context[Unit]): Context[Unit] =
-    xs.foldLeft(pure(()))((ctx, a) => ctx.flatMap(_ => f(a)))
+    xs.foldLeft(pure(()))((ctx, a) => ctx.flatMap { case () => f(a) })
 
   def call(f: FunDecl, args: List[Value]): Context[Value] = {
     val bindings = for (
@@ -104,14 +143,10 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
 
     for (
       // bind arguments
-      _ <- reduce(bindings) { case (id, arg) => alloc(arg).map(addr => bind(id, addr)) };
-      // allocate variables
-      _ <- reduce(f.block.vars.flatMap(_.decls)) { case IdentifierDecl(name, span) =>
-        alloc(NullVal).map(addr => bind(Identifier(name, span), addr))
-      };
+      () <- reduce(bindings) { case (id, arg) => alloc(arg).flatMap(addr => bind(id, addr)) };
       // evaluate body
       v <- f.block.body.foldLeft(pure(NullVal: Value))((ctx, stmt) =>
-        for (_ <- ctx; v <- eval(stmt)) yield v
+        for (NullVal <- ctx; v <- eval(stmt)) yield v
       )
     ) yield v
   }
@@ -132,13 +167,6 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
         case (problem, _) => crash(s"operator $operator expected int, got $problem", left.span)
       }
   }.flatten
-
-  sealed trait Value
-  object NullVal extends Value
-  case class IntVal(n: Int) extends Value
-  case class AddrVal(addr: Int) extends Value
-  case class FunAddrVal(name: String) extends Value
-  case class RecordVal() extends Value // TODO
 
   def run(mainArgs: List[Int] = Nil): Int = {
     program.declarations.filter(_.isInstanceOf[FunDecl]).find(_.name == "main") match {

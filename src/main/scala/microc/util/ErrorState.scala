@@ -1,5 +1,6 @@
 package microc.util
 
+import microc.interpreter.InterpreterState
 import microc.util.ErrorState.flatMap
 
 trait ErrorState[Error, State, +A] {
@@ -14,7 +15,19 @@ object ErrorState {
   def flatMap[E, S, A, B](x: ErrorState[E, S, A])(f: A => ErrorState[E, S, B]): ErrorState[E, S, B] =
     s => x(s) match {
       case Left(err) => Left(err)
-      case Right((a, s2)) => f(a)(s2)
+      case Right((a, s2)) => {
+        (s, s2) match {
+          case (state: InterpreterState, state2: InterpreterState) => {
+            if (state != state2) {
+              println("huh")
+            } else {
+              println("equal states")
+            }
+          }
+          case _ => println("somethin's amiss")
+        }
+        f(a)(s2)
+      }
     }
 
   def get[E, S]: ErrorState[E, S, S] = s => Right((s, s))
