@@ -1,6 +1,5 @@
 package microc.util
 
-import microc.interpreter.InterpreterState
 import microc.util.ErrorState.flatMap
 
 trait ErrorState[Error, State, +A] {
@@ -15,24 +14,18 @@ object ErrorState {
   def flatMap[E, S, A, B](x: ErrorState[E, S, A])(f: A => ErrorState[E, S, B]): ErrorState[E, S, B] =
     s => x(s) match {
       case Left(err) => Left(err)
-      case Right((a, s2)) => {
-        (s, s2) match {
-          case (state: InterpreterState, state2: InterpreterState) => {
-            if (state != state2) {
-              println("huh")
-            } else {
-              println("equal states")
-            }
-          }
-          case _ => println("somethin's amiss")
-        }
-        f(a)(s2)
-      }
+      case Right((a, s2)) => f(a)(s2)
     }
 
   def get[E, S]: ErrorState[E, S, S] = s => Right((s, s))
   def put[E, S](s: S): ErrorState[E, S, Unit] = _ => Right(((), s))
   def crash[E, S, A](e: E): ErrorState[E, S, A] = _ => Left(e)
+
+  def reduce[E, S, A](xs: Iterable[A])(f: A => ErrorState[E, S, Unit]): ErrorState[E, S, Unit] =
+    xs.foldLeft(pure[E, S, Unit](()))((mu, a) => flatMap(mu) { case () => f(a) })
+
+  def foldLeft[E, S, A, B](xs: Iterable[A])(init: B)(f: (B, A) => ErrorState[E, S, B]): ErrorState[E, S, B] =
+    xs.foldLeft(pure[E, S, B](init))((mb, a) => flatMap(mb)(b => f(b, a)))
 
   implicit class ErrorStateOps[E, S, A](x: ErrorState[E, S, A]) {
     def flatMap[B](f: A => ErrorState[E, S, B]): ErrorState[E, S, B] = ErrorState.flatMap(x)(f)
