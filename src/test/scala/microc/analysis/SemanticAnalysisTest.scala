@@ -89,7 +89,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'y' not declared", Span(Loc(4, 4), Loc(4, 4)))))
+      Left(List(SemanticError("undefined reference to y", Span(Loc(4, 4), Loc(4, 4)))))
     )
   }
 

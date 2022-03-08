@@ -68,7 +68,18 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
         h <- heap;
         () <- setHeap(h.updated(addr, r))
       ) yield NullVal
-      case AssignStmt(left, right, span) => ???
+      case AssignStmt(Deref(pointer, ptrSpan), right, span) => for (
+        ptr <- eval(pointer);
+        addr <- ptr match {
+          case AddrVal(addr) => pure(addr)
+          case NullVal => crash(s"attempt to dereference a null value", ptrSpan.highlighting(pointer.span))
+          case v => crash(s"attempt to dereference $v", ptrSpan.highlighting(pointer.span))
+        };
+        v <- eval(right);
+        h <- heap;
+        () <- setHeap(h.updated(addr, v))
+      ) yield v
+      case AssignStmt(left, _, span) => crash(s"cannot assign to $left", span.highlighting(left.span))
       case NestedBlockStmt(body, span) => body.foldLeft(pure(NullVal: Value)) {
         case (ctx, stmt) => ctx.flatMap(_ => eval(stmt))
       }
@@ -141,6 +152,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
   ) yield v
 
   def evalBinOp(operator: BinaryOperator, left: Expr, right: Expr): Context[Value] = {
+    val span = left.span ++ right.span
     for (lv <- eval(left); rv <- eval(right))
       yield (lv, rv) match {
         case (IntVal(l), IntVal(r)) =>
@@ -154,8 +166,12 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
           }))
         case (x@(NullVal | AddrVal(_) | FunAddrVal(_)), y@(NullVal | AddrVal(_) | FunAddrVal(_)))
           if operator == Equal => pure(IntVal(if (x == y) 1 else 0))
-        case (IntVal(_), problem) => crash(s"operator $operator expected int, got $problem", right.span)
-        case (problem, _) => crash(s"operator $operator expected int, got $problem", left.span)
+        case (x, y) if operator == Equal =>
+          crash(s"operator $operator expected two integers or two pointers, got $x and $y", span)
+        case (IntVal(_), problem) =>
+          crash(s"operator $operator expected int, got $problem", span.highlighting(right.span))
+        case (problem, _) =>
+          crash(s"operator $operator expected int, got $problem", span.highlighting(left.span))
       }
   }.flatten
 
