@@ -1,6 +1,8 @@
 package microc.interpreter
 
+import microc.analysis.SemanticException
 import microc.ast.{Loc, Span}
+import microc.cli.Reporter
 import microc.util.CharacterSets.NL
 import microc.{Examples, Parsing}
 import munit.FunSuite
@@ -176,7 +178,7 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
           |   return r.b;
           | }
           |""".stripMargin),
-      Left(ExecutionException("Non-existing field (b) access in {a:1}", Span(Loc(5, 5), Loc(5, 5))))
+      Left(ExecutionException("missing field b in {a: 1}", Span(Loc(5, 5), Loc(5, 5))))
     )
   }
 
@@ -191,7 +193,7 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
           | }
           |""".stripMargin
       )
-      , Left(ExecutionException("Nested records are not supported, use pointers", Span(Loc(4, 19), Loc(4, 19))))
+      , Left(ExecutionException("nested records are not supported, use pointers", Span(Loc(4, 16), Loc(4, 24), Some(Span(Loc(4, 19), Loc(4, 24))))))
     )
   }
 
@@ -356,7 +358,14 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
     val stdout = new StringWriter()
     val stdin = new StringReader(input)
     val program = parseUnsafe(code)
-    val interpreter = Interpreter(program, stdin, stdout)
+    val reporter = new Reporter(code)
+    val interpreter = try {
+      Interpreter(program, stdin, stdout)
+    } catch {
+      case e: SemanticException =>
+        println(e.format(reporter))
+        throw e
+    }
 
     @tailrec def readStdin(acc: StringBuilder = new StringBuilder): String = {
       val c = stdin.read()
@@ -369,7 +378,9 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
       val unconsumedStdin = readStdin()
       Right(Result(status, stdout.toString.trim, unconsumedStdin))
     } catch {
-      case e: ExecutionException => Left(e)
+      case e: ExecutionException =>
+        println(e.format(reporter))
+        Left(e)
     }
   }
 }

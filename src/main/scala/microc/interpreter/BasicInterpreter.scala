@@ -3,12 +3,14 @@ package microc.interpreter
 import microc.analysis.Declarations
 import microc.ast._
 import microc.util.ErrorState
-import microc.util.ErrorState.{ErrorStateOps, put, reduce, crash => _crash, get => _get, pure => _pure}
+import microc.util.ErrorState.{ErrorStateOps, foldLeft, put, reduce, crash => _crash, get => _get, pure => _pure}
 
-import java.io.{Reader, Writer}
+import java.io.{BufferedReader, Reader, Writer}
+import scala.annotation.tailrec
 
-class BasicInterpreter(program: Program, declarations: Declarations, stdin: Reader, stdout: Writer)
+class BasicInterpreter(program: Program, declarations: Declarations, reader: Reader, stdout: Writer)
   extends Interpreter {
+  private val stdin: BufferedReader = new BufferedReader(reader, 1)
 
   case class Error(msg: String, location: Span, hints: List[(String, Span)] = Nil)
 
@@ -57,39 +59,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
   }
 
   def eval(stmt: Stmt): Context[Value] = stmt match {
-    case block: StmtInNestedBlock => block match {
-      case AssignStmt(id: Identifier, right, span) => for (
-        e <- env;
-        addr <- declarations(id) match {
-          case id: IdentifierDecl => pure(e(id))
-          case _: FunDecl => crash("cannot assign to a function", span.highlighting(id.span))
-        };
-        r <- eval(right);
-        h <- heap;
-        () <- setHeap(h.updated(addr, r))
-      ) yield NullVal
-      case AssignStmt(Deref(pointer, ptrSpan), right, span) => for (
-        ptr <- eval(pointer);
-        addr <- ptr match {
-          case AddrVal(addr) => pure(addr)
-          case NullVal => crash(s"attempt to dereference a null value", ptrSpan.highlighting(pointer.span))
-          case v => crash(s"attempt to dereference $v", ptrSpan.highlighting(pointer.span))
-        };
-        v <- eval(right);
-        h <- heap;
-        () <- setHeap(h.updated(addr, v))
-      ) yield v
-      case AssignStmt(left, _, span) => crash(s"cannot assign to $left", span.highlighting(left.span))
-      case NestedBlockStmt(body, span) => body.foldLeft(pure(NullVal: Value)) {
-        case (ctx, stmt) => ctx.flatMap(_ => eval(stmt))
-      }
-      case IfStmt(guard, thenBranch, elseBranch, span) => for (
-        condition <- eval(guard);
-        result <- eval(if (condition.truthy) thenBranch else elseBranch.getOrElse(???))
-      ) yield result
-      case WhileStmt(guard, block, span) => ???
-      case OutputStmt(expr, span) => ???
-    }
+    case block: StmtInNestedBlock => evalInBlock(block)
     case block: Block => block match {
       case NestedBlockStmt(body, span) => ???
       case FunBlockStmt(vars, stmts, ret, span) => ???
@@ -102,6 +72,52 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
       }) yield NullVal
   }
 
+  @tailrec
+  private def lvalue(expr: Expr): Context[AddrVal] = expr match {
+    case FieldAccess(record, field, span) => eval(record).flatMap {
+      case rec@RecordVal(fields) => fields.get(field) match {
+        case Some(value) => pure(value)
+        case None => crash(s"missing field $field in $rec", span)
+      }
+      case v => crash(s"cannot access field $field of $v, it is not a record", span)
+    }
+    case id@Identifier(_, span) => findId(id, span)
+    case Deref(pointer, _) => lvalue(pointer)
+    case VarRef(id, span) => findId(id, span)
+    case v => crash(s"$v isn't an lvalue", expr.span)
+  }
+
+  private def findId(id: Identifier, span: Span): Context[AddrVal] = {
+    // FIXME unsafe ugliness
+    env.flatMap(_.get(declarations(id).asInstanceOf[IdentifierDecl]) match {
+      case Some(addr) => pure(AddrVal(addr))
+      case None => crash(???, span)
+    })
+  }
+
+  private def evalInBlock(block: StmtInNestedBlock): Context[Value] = block match {
+    case AssignStmt(left, right, _) => for (
+      AddrVal(addr) <- lvalue(left);
+      v <- eval(right);
+      h <- heap;
+      () <- setHeap(h.updated(addr, v))
+    ) yield v
+    case NestedBlockStmt(body, _) => body.foldLeft(pure(NullVal: Value)) {
+      case (ctx, stmt) => ctx.flatMap(_ => eval(stmt))
+    }
+    case IfStmt(guard, thenBranch, elseBranch, _) => for (
+      condition <- eval(guard);
+      result <- eval(if (condition.truthy) thenBranch else elseBranch.getOrElse(???))
+    ) yield result
+    case WhileStmt(guard, block, span) => ???
+    case OutputStmt(expr, span) => eval(expr).flatMap {
+      case IntVal(n) =>
+        stdout.write(n.toString)
+        pure(NullVal)
+      case v => crash(s"attempt to output $v", span)
+    }
+  }
+
   def eval(expr: Expr): Context[Value] = expr match {
     case Null(_) => pure(NullVal)
     case Number(value, _) => pure(IntVal(value))
@@ -111,7 +127,10 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
     }
     case BinaryOp(operator, left, right, _) => evalBinOp(operator, left, right)
     case CallFuncExpr(targetFun, argExprs, span) => evalCall(targetFun, argExprs, span)
-    case Input(_) => ???
+    case Input(_) => pure(
+      try IntVal(stdin.readLine().toInt)
+      catch { case _: java.io.IOException => NullVal }
+    )
     case Alloc(expr, _) => for (v <- eval(expr); addr <- alloc(v)) yield AddrVal(addr)
     case VarRef(id, _) => for (e <- env) yield declarations(id) match {
       case id: IdentifierDecl => AddrVal(e(id))
@@ -122,8 +141,23 @@ class BasicInterpreter(program: Program, declarations: Declarations, stdin: Read
       case Some(Left(fnDecl)) => crash(s"attempt to dereference function ${fnDecl.name}, which can only be called", span)
       case None => crash(s"attempt to dereference $v", span)
     }).flatten
-    case Record(fields, _) => ???
-    case FieldAccess(record, field, _) => ???
+    case Record(fields, _) => foldLeft(fields)(Map[String, AddrVal]()) {
+      (acc, field) => for (
+        v <- eval(field.expr);
+        () <- v match {
+          case RecordVal(_) => crash(s"nested records are not supported, use pointers", field.span.highlighting(field.expr.span))
+          case _ => pure(())
+        };
+        addr <- alloc(v)
+      ) yield acc + (field.name -> AddrVal(addr))
+    }.map(RecordVal)
+    case FieldAccess(record, field, span) => eval(record).flatMap {
+      case RecordVal(fields) => fields.get(field) match {
+        case Some(AddrVal(addr)) => heap.map(_(addr))
+        case None => crash(s"no such field $field", span)
+      }
+      case v => crash(s"cannot access field $field of $v, it is not a record", span.highlighting(record.span))
+    }
   }
 
   private def evalCall(targetFun: Expr, argExprs: List[Expr], span: Span): Context[Value] = {

@@ -32,7 +32,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
         |   return 2;
         | }
         |""".stripMargin),
-      Left(List(SemanticError("identifier 'f' already declared (2:2)", Span(Loc(6, 2), Loc(6, 2)))))
+      Left(List(SemanticError("redeclaration of f, previously declared at 2:2-4:2", Span(Loc(6, 2), Loc(8, 2)))))
     )
   }
 
@@ -49,7 +49,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'f' already declared (2:2)", Span(Loc(7, 8), Loc(7, 8)))))
+      Left(List(SemanticError("redeclaration of f, previously declared at 2:2-4:2", Span(Loc(7, 8), Loc(7, 8)))))
     )
   }
 
@@ -62,7 +62,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'x' already declared (3:8)", Span(Loc(3, 12), Loc(3, 12)))))
+      Left(List(SemanticError("redeclaration of x, previously declared at 3:8-3:8", Span(Loc(3, 12), Loc(3, 12)))))
     )
   }
 
@@ -75,7 +75,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("identifier 'x' already declared (2:4)", Span(Loc(3, 10), Loc(3, 10)))))
+      Left(List(SemanticError("redeclaration of x, previously declared at 2:4-2:4", Span(Loc(3, 10), Loc(3, 10)))))
     )
   }
 
@@ -103,7 +103,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("duplicate field name 'a'", Span(Loc(4, 21), Loc(4, 21)))))
+      Left(List(SemanticError("field a already exists at 4:9-4:12", Span(Loc(4, 21), Loc(4, 24)))))
     )
   }
 
@@ -117,7 +117,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign to a function", Span(Loc(4, 6), Loc(4, 6)))))
+      Left(List(SemanticError("cannot assign to a function", Span(Loc(4, 4), Loc(4, 9), Some(Span(Loc(4, 4), Loc(4, 4)))))))
     )
   }
 
@@ -130,7 +130,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign into rvalue 3[3:4]", Span(Loc(3, 6), Loc(3, 6)))))
+      Left(List(SemanticError("cannot assign to 3[3:4-3:4]", Span(Loc(3, 4), Loc(3, 9), Some(Span(Loc(3, 4), Loc(3, 4)))))))
     )
   }
 
