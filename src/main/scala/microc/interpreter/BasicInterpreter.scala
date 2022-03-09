@@ -98,6 +98,23 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     }
   }
 
+  def evalWhile(guard: Expr, block: StmtInNestedBlock): Context[Value] = { init =>
+    @tailrec
+    def loop(s: InterpreterState): Either[List[Error], (Value, InterpreterState)] =
+      eval(guard)(s) match {
+        case Left(errs) => Left(errs)
+        case Right((v, s2)) if v.truthy => eval(block)(s2) match {
+          case Left(errs) => Left(errs)
+          case Right((_, s3)) => loop(s3)
+        }
+        case Right((v, s2)) =>
+          println(v)
+          Right((NullVal, s2))
+      }
+
+    loop(init)
+  }
+
   private def evalInBlock(block: StmtInNestedBlock): Context[Value] = block match {
     case AssignStmt(left, right, _) => for (
       AddrVal(addr) <- lvalue(left);
@@ -112,7 +129,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
       condition <- eval(guard);
       result <- eval(if (condition.truthy) thenBranch else elseBranch.getOrElse(???))
     ) yield result
-    case WhileStmt(guard, block, span) => ???
+    case WhileStmt(guard, block, _) => evalWhile(guard, block)
     case OutputStmt(expr, span) => eval(expr).flatMap {
       case IntVal(n) =>
         stdout.write(n.toString)
@@ -199,7 +216,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
             case Times => l * r
             case Divide => l / r
             case Equal => if (l == r) 1 else 0
-            case LessThan => if (l < r) 1 else 0
+            case GreaterThan => if (l > r) 1 else 0
           }))
         case (x@(NullVal | AddrVal(_) | FunAddrVal(_)), y@(NullVal | AddrVal(_) | FunAddrVal(_)))
           if operator == Equal => pure(IntVal(if (x == y) 1 else 0))

@@ -1,7 +1,9 @@
 package microc.parser
 
 import microc.ast.{Expr, Loc, Program, Span, Stmt}
+import munit.IgnoreSuite
 
+@IgnoreSuite
 class PCParserTest extends AbstractParserTest {
   override def parser: Parser = new PCParser
 
