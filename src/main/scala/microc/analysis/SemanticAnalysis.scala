@@ -91,6 +91,28 @@ class SemanticAnalysis {
     }
   ) yield ()
 
+  @tailrec
+  private def lvalue(expr: Expr): Analysis[Boolean] = expr match {
+    case ast.Null(span) => pure(false)
+    case ast.Number(value, span) => pure(false)
+    case Identifier(name, span) => env.flatMap(_.get(name) match {
+      case Some(_: FunDecl) => crash(s"cannot assign to a function", expr.span)
+      // not handling unbound identifiers here, regular analysis should catch those
+      case _ => pure(true)
+    })
+    case BinaryOp(operator, left, right, span) => pure(false)
+    case CallFuncExpr(targetFun, args, span) => pure(false)
+    case Input(span) => pure(false)
+    case Alloc(expr, span) => pure(false)
+    case VarRef(id, span) => pure(false)
+    case Deref(pointer, span) => lvalue(pointer)
+    case Record(fields, span) => pure(false)
+    case FieldAccess(record, field, span) => lvalue(record)
+  }
+
+  private def expect(a: Boolean): (String, Span) => Analysis[Unit] =
+    if (a) (_, _) => pure(()) else crash
+
   private def go(stmt: Stmt): Analysis[Unit] = stmt match {
     case block: StmtInNestedBlock => block match {
       case AssignStmt(id: Identifier, right, span) => env.flatMap(_.get(id.name) match {
@@ -98,10 +120,12 @@ class SemanticAnalysis {
         case Some(_: FunDecl) => crash("cannot assign to a function", span.highlighting(id.span))
         case None => go(id) // this call will crash and take care of the error message
       })
-      case AssignStmt(left@(Deref(_, _) | FieldAccess(_, _, _)), right, _) =>
-        for (() <- go(left); () <- go(right)) yield ()
-      case AssignStmt(left, _, span) =>
-        crash(s"cannot assign to $left", span.highlighting(left.span))
+      case AssignStmt(left, right, span) => for (
+        isLvalue <- lvalue(left);
+        () <- expect(isLvalue)(s"cannot assign to rvalue $left", span.highlighting(left.span));
+        () <- go(left);
+        () <- go(right)
+      ) yield ()
       case NestedBlockStmt(body, _) => goOver(body)
       case IfStmt(guard, thenBranch, elseBranch, _) =>
         for (() <- go(guard); () <- go(thenBranch); () <- elseBranch.map(go).getOrElse(pure(()))) yield ()

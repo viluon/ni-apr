@@ -88,11 +88,14 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
   }
 
   private def findId(id: Identifier, span: Span): Context[AddrVal] = {
-    // FIXME unsafe ugliness
-    env.flatMap(_.get(declarations(id).asInstanceOf[IdentifierDecl]) match {
-      case Some(addr) => pure(AddrVal(addr))
-      case None => crash(???, span)
-    })
+    declarations.get(id) match {
+      case Some(idDecl: IdentifierDecl) => env.flatMap(_.get(idDecl) match {
+        case Some(addr) => pure(AddrVal(addr))
+        case None => crash(s"undefined reference to $id", span)
+      })
+      case Some(decl) => crash(s"$id does not refer to a variable, it points to $decl", span)
+      case None => throw new IllegalStateException(s"semantic analysis missed $id at $span")
+    }
   }
 
   private def evalInBlock(block: StmtInNestedBlock): Context[Value] = block match {

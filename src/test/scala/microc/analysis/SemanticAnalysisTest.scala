@@ -130,7 +130,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign to 3[3:4-3:4]", Span(Loc(3, 4), Loc(3, 9), Some(Span(Loc(3, 4), Loc(3, 4)))))))
+      Left(List(SemanticError("cannot assign to rvalue 3[3:4-3:4]", Span(Loc(3, 4), Loc(3, 9), Some(Span(Loc(3, 4), Loc(3, 4)))))))
     )
   }
 
@@ -143,7 +143,10 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
           |   return 1;
           | }
           |""".stripMargin),
-      Left(List(SemanticError("cannot assign into rvalue {x:1}.x[3:9]", Span(Loc(3, 12), Loc(3, 12)))))
+      Left(List(SemanticError(
+        "cannot assign to rvalue {x:1}.x[3:4-3:10]",
+        Span(Loc(3, 4), Loc(3, 15), Some(Span(Loc(3, 4), Loc(3, 10), Some(Span(Loc(3, 9), Loc(3, 10))))))
+      )))
     )
   }
 
