@@ -32,7 +32,7 @@ object ErrorState {
     def map[B](f: A => B): ErrorState[E, S, B] = x.flatMap(a => pure(f(a)))
     def withFilter(f: A => Boolean): ErrorState[E, S, A] = x.flatMap(a => () match {
       case _ if f(a) => pure(a)
-      case _ => crash(???)
+      case _ => throw new IllegalStateException("fallible patterns are not allowed")
     })
   }
 

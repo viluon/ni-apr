@@ -72,16 +72,19 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
       }) yield NullVal
   }
 
-  @tailrec
-  private def lvalue(expr: Expr): Context[AddrVal] = expr match {
-    case FieldAccess(record, field, span) => eval(record).flatMap {
+  private def lvalue(expr: Expr): Context[Value] = expr match {
+    case FieldAccess(record, field, span) => lvalue(record).flatMap {
       case rec@RecordVal(fields) => fields.get(field) match {
         case Some(value) => pure(value)
         case None => crash(s"missing field $field in $rec", span)
       }
       case v => crash(s"cannot access field $field of $v, it is not a record", span)
     }
-    case id@Identifier(_, span) => findId(id, span)
+    case id@Identifier(_, span) => findId(id, span).flatMap(deref).flatMap {
+      case Some(Right(value)) => pure(value)
+      case Some(Left(_)) => crash(s"cannot assign to a function", span)
+      case None => throw new IllegalStateException(s"semantic analysis missed $id at $span")
+    }
     case Deref(pointer, _) => lvalue(pointer)
     case VarRef(id, span) => findId(id, span)
     case v => crash(s"$v isn't an lvalue", expr.span)
@@ -115,13 +118,81 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     loop(init)
   }
 
-  private def evalInBlock(block: StmtInNestedBlock): Context[Value] = block match {
-    case AssignStmt(left, right, _) => for (
-      AddrVal(addr) <- lvalue(left);
+  private def set(addr: Int, v: Value): Context[Unit] = for (
+    h <- heap;
+    () <- () match {
+      case () if h.indices.contains(addr) => pure(())
+      case () => throw new IllegalStateException(
+        s"attempt to assign $v to address $addr, which is out of bounds (0 .. ${h.length})"
+      )
+    };
+    () <- setHeap(h.updated(addr, v))
+  ) yield ()
+
+  private def evalAssignment(left: Expr, right: Expr, span: Span): Context[Value] = left match {
+    case DirectWrite(id, span) => for (
+      AddrVal(addr) <- findId(id, span);
       v <- eval(right);
-      h <- heap;
-      () <- setHeap(h.updated(addr, v))
+      () <- set(addr, v)
     ) yield v
+    case IndirectWrite(expr, sp) => for (
+      target <- eval(expr);
+      addr <- target match {
+        case NullVal => crash(s"attempt to assign to a null pointer", span.highlighting(sp))
+        case AddrVal(addr) => pure(addr)
+        case v => crash(s"cannot dereference $v", sp)
+      };
+      v <- eval(right);
+      () <- set(addr, v)
+    ) yield v
+    case DirectFieldWrite(id, field, sp) => for (
+      AddrVal(addr) <- findId(id, sp);
+      h <- heap;
+      rec: RecordVal <- h(addr) match {
+        case r: RecordVal if r.fields.contains(field) => pure(r)
+        case r: RecordVal =>
+          val fields = () match {
+            case _ if r.fields.isEmpty => "no fields"
+            case _ if r.fields.size == 1 => s"the field ${r.fields.keysIterator.next()}"
+            case _ => r.fields.keys.mkString("fields ", ",", "")
+          }
+          crash(s"cannot assign to field $field of record $id", sp)
+          .withHint(s"$id is a record with fields $fields", id.span)
+        case v => crash(s"cannot assign to field $field of variable $id", sp)
+          .withHint(s"$id is $v, not a record", sp)
+      };
+      v <- eval(right);
+      () <- set(addr, RecordVal(rec.fields.updated(field, v)))
+    ) yield v
+    case IndirectFieldWrite(expr, field, sp) => for (
+      target <- eval(expr);
+      addr <- target match {
+        case NullVal => crash(s"attempt to assign to a null pointer", span.highlighting(sp))
+        case AddrVal(addr) => pure(addr)
+        case v => crash(s"cannot dereference $v", sp)
+      };
+      h <- heap;
+      rec: RecordVal <- h(addr) match {
+        case r: RecordVal if r.fields.contains(field) => pure(r)
+        case r: RecordVal =>
+          val fields = () match {
+            case _ if r.fields.isEmpty => "no fields"
+            case _ if r.fields.size == 1 => s"the field ${r.fields.keysIterator.next()}"
+            case _ => r.fields.keys.mkString("fields ", ",", "")
+          }
+          crash(s"cannot assign to field $field of record $r", sp)
+            .withHint(s"$r is a record with fields $fields", expr.span)
+        case v => crash(s"cannot assign to field $field of $v", sp)
+          .withHint(s"$v is not a record", sp)
+      };
+      v <- eval(right);
+      () <- set(addr, RecordVal(rec.fields.updated(field, v)))
+    ) yield v
+    case _ => crash(s"cannot assign to $left", span.highlighting(left.span))
+  }
+
+  private def evalInBlock(block: StmtInNestedBlock): Context[Value] = block match {
+    case AssignStmt(left, right, span) => evalAssignment(left, right, span)
     case NestedBlockStmt(body, _) => body.foldLeft(pure(NullVal: Value)) {
       case (ctx, stmt) => ctx.flatMap(_ => eval(stmt))
     }
