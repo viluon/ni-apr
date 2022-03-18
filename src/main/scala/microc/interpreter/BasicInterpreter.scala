@@ -60,12 +60,9 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
 
   def eval(stmt: Stmt): Context[Value] = stmt match {
     case block: StmtInNestedBlock => evalInBlock(block)
-    case block: Block => block match {
-      case NestedBlockStmt(body, span) => ???
-      case FunBlockStmt(vars, stmts, ret, span) => ???
-    }
-    case ReturnStmt(expr, span) => eval(expr)
-    case VarStmt(decls, span) =>
+    case block: Block => throw new IllegalStateException("oops")
+    case ReturnStmt(expr, _) => eval(expr)
+    case VarStmt(decls, _) =>
       // allocate variables
       for (() <- reduce(decls) { decl: IdentifierDecl =>
         alloc(NullVal).flatMap(addr => bind(decl, addr))
@@ -160,7 +157,11 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     }
     case IfStmt(guard, thenBranch, elseBranch, _) => for (
       condition <- eval(guard);
-      result <- eval(if (condition.truthy) thenBranch else elseBranch.getOrElse(???))
+      result <- elseBranch match {
+        case _ if condition.truthy => eval(thenBranch)
+        case Some(alternative) => eval(alternative)
+        case None => pure(NullVal)
+      }
     ) yield result
     case WhileStmt(guard, block, _) => evalWhile(guard, block)
     case OutputStmt(expr, span) => eval(expr).flatMap {
