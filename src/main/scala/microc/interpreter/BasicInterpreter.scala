@@ -110,9 +110,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
           case Left(errs) => Left(errs)
           case Right((_, s3)) => loop(s3)
         }
-        case Right((v, s2)) =>
-          println(v)
-          Right((NullVal, s2))
+        case Right((v, s2)) => Right((NullVal, s2))
       }
 
     loop(init)
@@ -204,6 +202,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     case OutputStmt(expr, span) => eval(expr).flatMap {
       case IntVal(n) =>
         stdout.write(n.toString)
+        stdout.write('\n')
         pure(NullVal)
       case v => crash(s"attempt to output $v", span)
     }
@@ -232,21 +231,17 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
       case Some(Left(fnDecl)) => crash(s"attempt to dereference function ${fnDecl.name}, which can only be called", span)
       case None => crash(s"attempt to dereference $v", span)
     }).flatten
-    case Record(fields, _) => foldLeft(fields)(Map[String, AddrVal]()) {
+    case Record(fields, _) => foldLeft(fields)(Map[String, Value]()) {
       (acc, field) => for (
         v <- eval(field.expr);
         () <- v match {
           case RecordVal(_) => crash(s"nested records are not supported, use pointers", field.span.highlighting(field.expr.span))
           case _ => pure(())
-        };
-        addr <- alloc(v)
-      ) yield acc + (field.name -> AddrVal(addr))
+        }
+      ) yield acc + (field.name -> v)
     }.map(RecordVal)
     case FieldAccess(record, field, span) => eval(record).flatMap {
-      case RecordVal(fields) => fields.get(field) match {
-        case Some(AddrVal(addr)) => heap.map(_(addr))
-        case None => crash(s"no such field $field", span)
-      }
+      case RecordVal(fields) => fields.get(field).map(pure).getOrElse(crash(s"no such field $field", span))
       case v => crash(s"cannot access field $field of $v, it is not a record", span.highlighting(record.span))
     }
   }
@@ -259,7 +254,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
         args <- argExprs.foldLeft(pure(List[Value]())) {
           case (soFar, argExp) => for (xs <- soFar; x <- eval(argExp)) yield x :: xs
         };
-        v <- call(decl, args);
+        v <- call(decl, args.reverse);
         () <- setEnv(originalEnv)
       ) yield v
       case Some(Right(v)) => crash(s"expected a function address, got $v", targetFun.span)

@@ -178,7 +178,7 @@ class InterpreterTest extends FunSuite with Parsing with Examples {
           |   return r.b;
           | }
           |""".stripMargin),
-      Left(ExecutionException("missing field b in {a: 1}", Span(Loc(5, 5), Loc(5, 5))))
+      Left(ExecutionException("cannot assign to field b of record r[5:4-5:4]", Span(Loc(5, 4), Loc(5, 6), Some(Span(Loc(5, 5), Loc(5, 6))))))
     )
   }
 
