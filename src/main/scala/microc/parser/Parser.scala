@@ -1,17 +1,20 @@
 package microc.parser
 
 import microc.ProgramException
-import microc.ast.{Expr, Loc, Program, Stmt}
+import microc.ast.{Expr, Program, Span, Stmt}
 import microc.cli.Reporter
 
 /**
   * Parser problem
   *
   * @param message the detail what went wrong
-  * @param span the location of the error in the source
+  * @param sp the location of the error in the source
   */
-case class ParseException(message: String, span: microc.ast.Span) extends ProgramException(message) {
-  override def format(reporter: Reporter): String = reporter.formatError("parse", message, span)
+case class ParseException(message: String, sp: Span) extends ProgramException(message) {
+  override def format(reporter: Reporter): String = reporter.formatErrors(List(new {
+    def msg: String = message
+    def span: Span = sp
+  }))
 }
 
 object Parser {

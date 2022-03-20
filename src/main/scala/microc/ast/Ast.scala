@@ -16,6 +16,8 @@ case class Loc(line: Int, col: Int) extends Ordered[Loc] {
 }
 
 case class Span(from: Loc, to: Loc, highlight: Option[Span] = None) extends Ordered[Span] {
+  def containsLine(line: Int): Boolean = (from.line to to.line) contains line
+
   override def toString: String = s"$from-$to"
 
   override def compare(that: Span): Int = {

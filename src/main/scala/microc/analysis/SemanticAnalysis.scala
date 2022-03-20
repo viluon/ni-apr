@@ -2,7 +2,6 @@ package microc.analysis
 
 import microc.ast.{Alloc, AssignStmt, BinaryOp, Block, CallFuncExpr, Decl, Deref, Expr, FieldAccess, FunBlockStmt, FunDecl, Identifier, IdentifierDecl, IfStmt, Input, NestedBlockStmt, OutputStmt, Program, Record, RecordField, ReturnStmt, Span, Stmt, StmtInNestedBlock, VarRef, VarStmt, WhileStmt}
 import microc.cli.Reporter
-import microc.util.CharacterSets.NL
 import microc.util.ErrorState
 import microc.util.ErrorState.{ErrorStateOps, reduce, crash => _crash, get => _get, pure => _pure, put => _put}
 import microc.{ProgramException, ast}
@@ -13,8 +12,7 @@ import scala.collection.immutable.{Iterable, Map}
 case class SemanticError(msg: String, span: Span)
 
 case class SemanticException(errors: List[SemanticError]) extends ProgramException("Semantic exception") {
-  override def format(reporter: Reporter): String =
-    errors.sortBy(_.span).map(x => reporter.formatError("semantic", x.msg, x.span)).mkString(NL)
+  override def format(reporter: Reporter): String = reporter.formatErrors(errors)
 }
 
 /**

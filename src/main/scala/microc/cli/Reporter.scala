@@ -5,7 +5,34 @@ import microc.ast.Span
 import scala.annotation.tailrec
 
 class Reporter(source: String, fileName: Option[String] = None) {
+  import scala.language.reflectiveCalls
   private val prefix = fileName.map(_ + ":").getOrElse("")
+
+  def formatErrors(srcErrs: Iterable[_ <: {def span: Span; def msg: String}]): String = {
+    val errs = srcErrs.toList.sortBy(_.span)
+    val firstLine = errs.head.span.from.line
+    val lastLine = errs.last.span.to.line
+
+    val bar = " | "
+    val noBar = "   "
+    assert(bar.length == noBar.length)
+
+    val lines = (firstLine to lastLine).flatMap(line => {
+      val lineNumber = s"% ${math.log10(lastLine).ceil.toInt}d".format(line)
+      (lineNumber + bar + lineContent(line)) :: (errs.find(_.span.containsLine(line)) match {
+        case Some(err) =>
+          val Span(from, to, hl) = err.span
+          val startCol = if (from.line == line) from.col else 1
+          val endCol = if (to.line == line) to.col else lineContent(line).length
+          val width = endCol - startCol + 1
+          val prefix = " " * (lineNumber.length + (startCol - 1))
+          prefix + bar + "¯" * width :: (if (line == to.line) List(prefix + noBar + " " + err.msg) else Nil)
+        case None => Nil
+      })
+    })
+
+    lines.mkString(System.lineSeparator())
+  }
 
   def formatError(kind: String, message: String, span: Span): String = {
     val Span(from, to, hl) = span

@@ -7,8 +7,11 @@ import microc.cli.Reporter
 
 import java.io.{Reader, Writer}
 
-case class ExecutionException(message: String, span: Span) extends ProgramException(message) {
-  override def format(reporter: Reporter): String = reporter.formatError("execution", message, span)
+case class ExecutionException(message: String, sp: Span) extends ProgramException(message) {
+  override def format(reporter: Reporter): String = reporter.formatErrors(List(new {
+    def msg: String = message
+    def span: Span = sp
+  }))
 }
 
 trait Interpreter {
