@@ -55,9 +55,12 @@ class CliParser extends SeqParsers[String] {
   lazy val Run: Parser[RunAction] =
     "run" ~> RunOpts.* ~ FILE ^^ { case opts ~ file => opts.foldLeft(RunAction(file))((acc, x) => x(acc)) }
 
+  lazy val Type: Parser[TypeAction] =
+    "type" ~> FILE ^^ (TypeAction(_))
+
   lazy val Help = "--help" ^^^ PrintHelpAction
 
-  lazy val Actions: Parser[Action] = Help | Run | Export | failure("invalid action")
+  lazy val Actions: Parser[Action] = Help | Run | Export | Type | failure("invalid action")
 
   // ----------------------------------------------------------------------------
   // HELPERS

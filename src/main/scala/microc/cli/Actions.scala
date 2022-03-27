@@ -1,7 +1,7 @@
 package microc.cli
 
 import microc.ProgramException
-import microc.analysis.SemanticAnalysis
+import microc.analysis.{SemanticAnalysis, TypeAnalysis}
 import microc.ast.JSONAstPrinter
 import microc.interpreter.BasicInterpreter
 import microc.parser.Parser
@@ -24,7 +24,7 @@ case object PrintHelpAction extends Action {
          |
          |actions:
          |  export [options] FILE  exports the microC program in FILE to JSON
-         |  
+         |
          |    options:
          |    --indent NUM         indent the result by NUM (default: no indent)
          |    --parser NAME        specify parser which parser to use
@@ -125,6 +125,30 @@ case class ExportAction(file: File,
       Using(out) { stream =>
         new JSONPrettyPrinter(indent).print(json, stream)
       }.get
+
+      0
+    } catch {
+      case e: ProgramException =>
+        System.err.println(e.format(reporter))
+        1
+    }
+  }
+}
+
+case class TypeAction(file: File,
+                      parserName: String = Parser.DefaultParserName)
+  extends Action
+    with ParsingAction {
+  override def run(): Int = {
+    val source = readInput(file)
+    val reporter = new Reporter(source, Some(file.getPath))
+
+    try {
+      val program = parser.parseProgram(source)
+      val declarations = new SemanticAnalysis().analyze(program)
+      val types = TypeAnalysis(declarations).analyze(program)
+
+      for ((decl, t) <- types) println(s"⟦$decl⟧ = $t")
 
       0
     } catch {
