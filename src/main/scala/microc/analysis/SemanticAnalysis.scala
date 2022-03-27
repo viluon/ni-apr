@@ -20,11 +20,11 @@ case class SemanticException(errors: List[SemanticError]) extends ProgramExcepti
   *
   * It checks the following:
   *   - [x] Use of an undeclared identifier.
-  *   - [ ] Duplicate identifiers.
+  *   - [x] Duplicate identifiers.
   *     note: there is a single namespace (shared by both functions and identifiers)
-  *   - [ ] Duplicate record field names.
-  *   - [ ] Assignment to a function.
-  *   - [ ] Getting address of a function.
+  *   - [x] Duplicate record field names.
+  *   - [x] Assignment to a function.
+  *   - [x] Getting address of a function.
   *
   * The result is a map of declarations, i.e., a map of identifiers to their declarations.
   *
