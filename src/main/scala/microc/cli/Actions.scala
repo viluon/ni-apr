@@ -146,9 +146,12 @@ case class TypeAction(file: File,
     try {
       val program = parser.parseProgram(source)
       val declarations = new SemanticAnalysis().analyze(program)
-      val types = TypeAnalysis(declarations).analyze(program)
+      val (errs, types) = TypeAnalysis(declarations).analyze(program)
 
       for ((decl, t) <- types) println(s"⟦$decl⟧ = $t")
+
+      println("\nerrors:")
+      for (err <- errs) println(err)
 
       0
     } catch {

@@ -1,7 +1,7 @@
 package microc.analysis
 
 import microc.ast
-import microc.ast.{Alloc, AssignStmt, AstNode, BinaryOp, Block, CallFuncExpr, Decl, Deref, Equal, Expr, FieldAccess, FunBlockStmt, Identifier, IfStmt, Input, NestedBlockStmt, OutputStmt, Program, ReturnStmt, Stmt, StmtInNestedBlock, VarRef, VarStmt, WhileStmt}
+import microc.ast.{Alloc, AssignStmt, AstNode, BinaryOp, CallFuncExpr, Decl, Deref, Equal, Expr, FieldAccess, Identifier, IfStmt, Input, NestedBlockStmt, OutputStmt, Program, StmtInNestedBlock, VarRef, WhileStmt}
 import microc.util.WriterState.pure
 import microc.util.{Monoid, WriterState}
 
@@ -54,60 +54,65 @@ case class TypeAnalysis(declarations: Declarations) {
       }
   }
 
-  def updateConstraints(f: UnionFind[Type] => UnionFind[Type]): Analysis[Unit] = s => (Nil, s.copy(unionFind = f(s.unionFind)), ())
-  def makeSet(x: Type): Analysis[Type] = for (() <- updateConstraints(_.makeSet(x))) yield x
-  // TODO actual unification
-  def unify(a: Type, b: Type): Analysis[Unit] = for (() <- updateConstraints(uf => {
-    val uf2 = uf.makeSet(a).makeSet(b)
-    uf2.union(a, b)
-    uf2
-  })) yield ()
+  def unify(a: Type, b: Type): Analysis[Unit] = s => {
+    val uf = s.unionFind.makeSet(a).makeSet(b)
+    val nextState = s.copy(unionFind = uf)
+    val (ta, tb) = (uf.forest(a).find(), uf.forest(b).find())
+    if (ta == tb) (Nil, nextState, ())
+    else {
+      def union(a: Type, b: Type) = {
+        uf.union(a, b)
+        (Nil, nextState, ())
+      }
+
+      (ta.x, tb.x) match {
+        case (v: Type.Var, t) => union(v, t)
+        case (t, v: Type.Var) => union(v, t)
+        case (t1, t2) if t1.getClass == t2.getClass =>
+          uf.union(t1, t2)
+          val paramPairs = (t1.productIterator zip t2.productIterator).asInstanceOf[Iterator[(Type, Type)]]
+          WriterState.foldLeft(paramPairs.toVector)(()) {
+            case (_, (p1, p2)) => unify(p1, p2)
+          }(implicitly)(nextState)
+        case (t1, t2) => (List(s"cannot unify $t1 with $t2"), nextState, ())
+      }
+    }
+  }
 
   def constrain(expr: Expr, f: Type => Type): Analysis[Type] = for (
     _expr_ <- fresh(expr);
     () <- unify(_expr_, f(_expr_)) // TODO smells like a fixpoint
   ) yield _expr_
 
-  def go(expr: Expr): Analysis[Type] = expr match {
+  def go(expr: Expr): Analysis[Type] = fresh(expr).flatMap(_expr_ => ((expr match {
     case nil: ast.Null => ???
-    case num: ast.Number => constrain(num, _ => Type.Int)
-    case id: Identifier => fresh(id)
+    case _: ast.Number => unify(_expr_, Type.Int)
+    case _: Identifier => pure(())
     case BinaryOp(Equal, left, right, _) => for (
-      _expr_ <- fresh(expr);
       () <- unify(_expr_, Type.Int);
       lt <- go(left);
       rt <- go(right);
       () <- unify(lt, rt)
-    ) yield Type.Int
+    ) yield ()
     case BinaryOp(_, left, right, _) => for (
-      _expr_ <- fresh(expr);
       lt <- go(left);
       rt <- go(right);
       () <- unify(lt, rt);
       () <- unify(rt, _expr_);
       () <- unify(_expr_, Type.Int)
-    ) yield Type.Int
+    ) yield ()
     case CallFuncExpr(targetFun, args, _) => for (
-      _expr_ <- fresh(expr);
       _fn_ <- go(targetFun);
       argTypes <- WriterState.foldLeft(args)(List[Type]())((acc, arg) => go(arg).map(_ :: acc));
       () <- unify(_fn_, Type.Function(argTypes, _expr_))
-    ) yield _expr_
-    case Input(_) => constrain(expr, _ => Type.Int)
-    case Alloc(expr, _) => constrain(expr, Type.Pointer) // TODO correct?
-    case VarRef(id, _) => for (
-      _expr_ <- fresh(expr);
-      _id_ <- go(id);
-      () <- unify(_expr_, Type.Pointer(_id_))
-    ) yield _expr_
-    case Deref(pointer, _) => for (
-      _deref_ <- fresh(expr);
-      ptr <- go(pointer);
-      () <- unify(Type.Pointer(_deref_), ptr)
-    ) yield _deref_
+    ) yield ()
+    case _: Input => unify(_expr_, Type.Int)
+    case Alloc(obj, _) => go(obj).flatMap(_obj_ => unify(_expr_, Type.Pointer(_obj_)))
+    case VarRef(id, _) => go(id).flatMap(_id_ => unify(_expr_, Type.Pointer(_id_)))
+    case Deref(pointer, _) => go(pointer).flatMap(_pointer_ => unify(Type.Pointer(_expr_), _pointer_))
     case ast.Record(fields, span) => ???
     case FieldAccess(record, field, span) => ???
-  }
+  }): Analysis[Unit]).map(_ => _expr_))
 
   def go(nestedStmt: StmtInNestedBlock): Analysis[Unit] = nestedStmt match {
     case AssignStmt(lhs, rhs, _) => for (
@@ -122,26 +127,18 @@ case class TypeAnalysis(declarations: Declarations) {
       () <- go(thenBranch);
       () <- elseBranch.map(go).getOrElse[Analysis[Unit]](pure(()))
     ) yield ()
-    case WhileStmt(guard, block, span) => ???
+    case WhileStmt(guard, block, _) => for (
+      _guard_ <- go(guard);
+      () <- unify(_guard_, Type.Int);
+      () <- go(block)
+    ) yield ()
     case OutputStmt(expr, _) => for (
       _expr_ <- go(expr);
       () <- unify(_expr_, Type.Int)
     ) yield ()
   }
 
-  def go(block: Block): Analysis[Unit] = block match {
-    case NestedBlockStmt(body, span) => ???
-    case FunBlockStmt(vars, stmts, ret, span) => ???
-  }
-
-  def go(stmt: Stmt): Analysis[Unit] = stmt match {
-    case block: StmtInNestedBlock => go(block)
-    case block: Block => go(block)
-    case ReturnStmt(expr, span) => ???
-    case VarStmt(decls, span) => ???
-  }
-
-  def analyze(program: Program): Map[Decl, Type] = {
+  def analyze(program: Program): (List[String], Map[Decl, Type]) = {
     val (log, TAState(typeVars, constraints), ()) = WriterState.foldLeft(program.funs)(())((_, fn) => for (
       _fn_ <- fresh(fn);
       paramTypes <- WriterState.foldLeft(fn.params)(List[Type]())((acc, param) => fresh(param).map(_ :: acc));
@@ -150,8 +147,15 @@ case class TypeAnalysis(declarations: Declarations) {
       () <- WriterState.foldLeft(fn.block.stmts)(())((_, stmt) => go(stmt))
     ) yield ())(implicitly)(TAState(Map(), UnionFind(Map())))
 
-    declarations.values.map(decl => {
-      decl -> constraints.forest(Type.Var(typeVars(decl))).find().x
+    def resolve(x: Type): Type = x match {
+      case Type.Pointer(t) => Type.Pointer(resolve(t))
+      case Type.Function(params, ret) => Type.Function(params.map((x: Type) => resolve(x)), resolve(ret))
+      case v: Type.Var => constraints.forest(v).find().x
+      case Type.Int => x
+    }
+
+    log -> declarations.values.map(decl => {
+      decl -> resolve(constraints.forest(Type.Var(typeVars(decl))).find().x)
     }).toMap
   }
 }
