@@ -36,7 +36,7 @@ case class TypeAnalysis(declarations: Declarations) {
     }
   }
 
-  case class TAState(typeVars: Map[AstNode, Int], unionFind: UnionFind[Type])
+  case class TAState(varCounter: Int, typeVars: Map[AstNode, Int], unionFind: UnionFind[Type])
   type Analysis[A] = WriterState[List[String], TAState, A]
 
   def fresh(expr: AstNode): Analysis[Type] = expr match {
@@ -45,14 +45,17 @@ case class TypeAnalysis(declarations: Declarations) {
       s.typeVars.get(expr) match {
         case Some(n) => (Nil, s, Type.Var(n))
         case None =>
-          val n = s.typeVars.size
+          val n = s.varCounter
           val t = Type.Var(n)
           (Nil, s.copy(
+            varCounter = n + 1,
             typeVars = s.typeVars + (expr -> n),
             unionFind = s.unionFind.makeSet(t)
           ), t)
       }
   }
+
+  def fresh: Analysis[Type] = s => (Nil, s.copy(varCounter = s.varCounter + 1), Type.Var(s.varCounter))
 
   def unify(a: Type, b: Type): Analysis[Unit] = s => {
     val uf = s.unionFind.makeSet(a).makeSet(b)
@@ -68,7 +71,7 @@ case class TypeAnalysis(declarations: Declarations) {
       (ta.x, tb.x) match {
         case (v: Type.Var, t) => union(v, t)
         case (t, v: Type.Var) => union(v, t)
-        case (t1, t2) if t1.getClass == t2.getClass =>
+        case (t1, t2) if t1 canEqual t2 =>
           uf.union(t1, t2)
           val paramPairs = (t1.productIterator zip t2.productIterator).asInstanceOf[Iterator[(Type, Type)]]
           WriterState.foldLeft(paramPairs.toVector)(()) {
@@ -79,26 +82,15 @@ case class TypeAnalysis(declarations: Declarations) {
     }
   }
 
-  def constrain(expr: Expr, f: Type => Type): Analysis[Type] = for (
-    _expr_ <- fresh(expr);
-    () <- unify(_expr_, f(_expr_)) // TODO smells like a fixpoint
-  ) yield _expr_
-
   def go(expr: Expr): Analysis[Type] = fresh(expr).flatMap(_expr_ => ((expr match {
-    case nil: ast.Null => ???
+    case _: ast.Null => fresh.flatMap(_fresh_ => unify(_expr_, Type.Pointer(_fresh_)))
     case _: ast.Number => unify(_expr_, Type.Int)
     case _: Identifier => pure(())
-    case BinaryOp(Equal, left, right, _) => for (
-      () <- unify(_expr_, Type.Int);
-      lt <- go(left);
-      rt <- go(right);
-      () <- unify(lt, rt)
-    ) yield ()
-    case BinaryOp(_, left, right, _) => for (
+    case BinaryOp(op, left, right, _) => for (
       lt <- go(left);
       rt <- go(right);
       () <- unify(lt, rt);
-      () <- unify(rt, _expr_);
+      () <- if (op == Equal) unify(rt, _expr_) else pure(()): Analysis[Unit];
       () <- unify(_expr_, Type.Int)
     ) yield ()
     case CallFuncExpr(targetFun, args, _) => for (
@@ -138,24 +130,51 @@ case class TypeAnalysis(declarations: Declarations) {
     ) yield ()
   }
 
+  private def readSolution(log: List[String], typeVars: Map[AstNode, Int], constraints: UnionFind[Type]): (List[String], Map[Decl, Type]) = {
+    def resolve(x: Type): Option[Type] = x match {
+      case Type.Pointer(t) => resolve(t).map(Type.Pointer)
+      case Type.Function(params, ret) => for (
+        // TODO probs reverse
+        resolvedParams <- params.map(resolve).foldLeft(Option(List[Type]()))(
+          (acc, opt) => for (t <- opt; ts <- acc) yield t :: ts
+        );
+        resolvedRet <- resolve(ret)
+      ) yield Type.Function(resolvedParams, resolvedRet)
+      case v: Type.Var if constraints.forest(v).find().x != v => resolve(constraints.forest(v).find().x)
+      case _: Type.Var => None
+      case Type.Int => Some(x)
+    }
+
+    val logBuf = log.toBuffer
+    logBuf.toList -> typeVars.keys.flatMap {
+      case decl: Decl =>
+        val tVar = Type.Var(typeVars(decl))
+        resolve(tVar) match {
+          case Some(typ) => List(decl -> typ)
+          case None =>
+            logBuf += s"failure during resolution of $tVar (for declaration $decl)"
+            Nil
+        }
+      case _ => Nil
+    }.toMap
+  }
+
   def analyze(program: Program): (List[String], Map[Decl, Type]) = {
-    val (log, TAState(typeVars, constraints), ()) = WriterState.foldLeft(program.funs)(())((_, fn) => for (
+    val (log, TAState(_, typeVars, constraints), ()) = WriterState.foldLeft(program.funs)(())((_, fn) => for (
       _fn_ <- fresh(fn);
       paramTypes <- WriterState.foldLeft(fn.params)(List[Type]())((acc, param) => fresh(param).map(_ :: acc));
       _ret_ <- fresh(fn.block.ret);
       () <- unify(_fn_, Type.Function(paramTypes, _ret_));
+      () <- if (fn.name == "main") {
+        for (
+          // main's arguments and return type are all integers
+          () <- WriterState.foldLeft(paramTypes)(())((_, _param_) => unify(_param_, Type.Int));
+          () <- unify(_ret_, Type.Int)
+        ) yield ()
+      } else pure(()): Analysis[Unit];
       () <- WriterState.foldLeft(fn.block.stmts)(())((_, stmt) => go(stmt))
-    ) yield ())(implicitly)(TAState(Map(), UnionFind(Map())))
+    ) yield ())(implicitly)(TAState(0, Map(), UnionFind(Map())))
 
-    def resolve(x: Type): Type = x match {
-      case Type.Pointer(t) => Type.Pointer(resolve(t))
-      case Type.Function(params, ret) => Type.Function(params.map((x: Type) => resolve(x)), resolve(ret))
-      case v: Type.Var => constraints.forest(v).find().x
-      case Type.Int => x
-    }
-
-    log -> declarations.values.map(decl => {
-      decl -> resolve(constraints.forest(Type.Var(typeVars(decl))).find().x)
-    }).toMap
+    readSolution(log, typeVars, constraints)
   }
 }

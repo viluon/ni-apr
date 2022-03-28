@@ -73,6 +73,12 @@ class SemanticAnalysis {
     () <- setEnv(saved)
   ) yield a
 
+  /**
+    * Catch semantic errors in the given program.
+    *
+    * @return The resolved references of all identifiers in the program.
+    *         The map's values are a subset of all program declarations, e.g. main() is often missing.
+    */
   def analyze(program: Program): Declarations = go(program)(AnalyserSate(Map(), Map())) match {
     case Left(errs) => throw SemanticException(errs)
     case Right((_, state)) => state.decls
