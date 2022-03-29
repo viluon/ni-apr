@@ -169,6 +169,7 @@ class SemanticAnalysis {
         case None => pure(acc + (field.name -> field))
       })
     }.flatMap(_ => goOverExprs(fields.map(_.expr)))
+      .flatMap(_ => get).flatMap(s => put(s.copy(fieldNames = s.fieldNames union fields.map(_.name).toSet)))
     case FieldAccess(record, _, _) => go(record)
   }
 

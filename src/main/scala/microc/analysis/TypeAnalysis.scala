@@ -112,8 +112,8 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
       () <- unify(_expr_, Type.Record(allFields.concat(typedFields).toMap))
     ) yield ()
     case FieldAccess(record, field, _) => for (
-      varsForFields <- WriterState.foldLeft(allFields)(Map[String, Type]()) {
-        case (acc, (name, _)) => fresh.map(freshVar => acc + (name -> freshVar))
+      varsForFields <- WriterState.foldLeft(fieldNames)(Map[String, Type]()) {
+        case (acc, name) => fresh.map(freshVar => acc + (name -> freshVar))
       };
       _record_ <- go(record);
       () <- unify(_record_, Type.Record(varsForFields + (field -> _expr_)))
@@ -158,7 +158,7 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
       case v: Type.Var if constraints.forest(v).find().x != v => resolve(constraints.forest(v).find().x)
       case _: Type.Var => None
       case Type.Int => Some(x)
-      case Type.AbsentField => ???
+      case Type.AbsentField => Some(Type.AbsentField)
       case Type.Mu(tVar, t) => ???
       case Type.Record(fields) => fields.map(f => f._1 -> resolve(f._2)).foldLeft(Option(List[(String, Type)]())) {
         case (acc, (name, opt)) => for (t <- opt; ts <- acc) yield (name -> t) :: ts
