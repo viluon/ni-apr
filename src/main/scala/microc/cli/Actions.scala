@@ -66,7 +66,7 @@ case class RunAction(file: File,
 
     try {
       val program = parser.parseProgram(source)
-      val declarations = new SemanticAnalysis().analyze(program)
+      val declarations = new SemanticAnalysis().analyze(program)._1
       val stdout = createOutput
       val interpreter = new BasicInterpreter(program, declarations, createInput, stdout)
       val status = interpreter.run()
@@ -145,8 +145,8 @@ case class TypeAction(file: File,
 
     try {
       val program = parser.parseProgram(source)
-      val declarations = new SemanticAnalysis().analyze(program)
-      val (errs, types) = TypeAnalysis(declarations).analyze(program)
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(program)
+      val (errs, types) = TypeAnalysis(declarations, fieldNames).analyze(program)
 
       for ((decl, t) <- types) println(s"⟦$decl⟧ = $t")
 

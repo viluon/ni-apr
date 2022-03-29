@@ -156,7 +156,7 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
 
   def analyze(code: String): Either[List[SemanticError], Declarations] = try {
     val analysis = new SemanticAnalysis()
-    val declarations = analysis.analyze(parseUnsafe(code))
+    val (declarations, _) = analysis.analyze(parseUnsafe(code))
     Right(declarations)
   } catch {
     case e: SemanticException => Left(e.errors)

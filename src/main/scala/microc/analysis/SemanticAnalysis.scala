@@ -31,7 +31,7 @@ case class SemanticException(errors: List[SemanticError]) extends ProgramExcepti
   */
 class SemanticAnalysis {
   type Env = Map[String, Decl]
-  case class AnalyserSate(env: Env, decls: Declarations)
+  case class AnalyserSate(env: Env, decls: Declarations, fieldNames: Set[String])
   type Analysis[A] = ErrorState[List[SemanticError], AnalyserSate, A]
 
   // help type inference
@@ -79,9 +79,9 @@ class SemanticAnalysis {
     * @return The resolved references of all identifiers in the program.
     *         The map's values are a subset of all program declarations, e.g. main() is often missing.
     */
-  def analyze(program: Program): Declarations = go(program)(AnalyserSate(Map(), Map())) match {
+  def analyze(program: Program): (Declarations, Set[String]) = go(program)(AnalyserSate(Map(), Map(), Set())) match {
     case Left(errs) => throw SemanticException(errs)
-    case Right((_, state)) => state.decls
+    case Right((_, state)) => (state.decls, state.fieldNames)
   }
 
   private def go(program: Program): Analysis[Unit] = for (

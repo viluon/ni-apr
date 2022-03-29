@@ -36,4 +36,20 @@ object Type {
   case object Int extends Type {
     override def toString: String = "int"
   }
+
+  case object AbsentField extends Type {
+    override def toString: String = "◇"
+  }
+
+  case class Record(fields: Map[String, Type]) extends Type {
+    override def productIterator: Iterator[Any] = fields.valuesIterator
+
+    override def toString: String = fields.toList.map(f => f._1 + ": " + f._2).sorted.mkString("{", ", ", "}")
+  }
+
+  case class Mu(tVar: Var, t: Type) extends Type {
+    override def productIterator: Iterator[Any] = List(t).iterator
+
+    override def toString: String = s"µ $tVar. $t"
+  }
 }

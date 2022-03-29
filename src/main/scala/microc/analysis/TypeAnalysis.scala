@@ -1,15 +1,18 @@
 package microc.analysis
 
+import microc.analysis.Type.AbsentField
 import microc.ast
 import microc.ast.{Alloc, AssignStmt, AstNode, BinaryOp, CallFuncExpr, Decl, Deref, Equal, Expr, FieldAccess, Identifier, IfStmt, Input, NestedBlockStmt, OutputStmt, Program, StmtInNestedBlock, VarRef, WhileStmt}
 import microc.util.WriterState.pure
 import microc.util.{Monoid, WriterState}
 
-case class TypeAnalysis(declarations: Declarations) {
+case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
   implicit def listMonoid[A]: Monoid[List[A]] = new Monoid[List[A]] {
     override def concat(l: List[A], r: List[A]): List[A] = l ++ r
     override def zero: List[A] = Nil
   }
+
+  private val allFields = fieldNames.map(_.->(AbsentField))
 
   case class UFNode[A](x: A, var parent: UFNode[A]) {
     def find(): UFNode[A] = if (parent eq this) this else {
@@ -87,10 +90,10 @@ case class TypeAnalysis(declarations: Declarations) {
     case _: ast.Number => unify(_expr_, Type.Int)
     case _: Identifier => pure(())
     case BinaryOp(op, left, right, _) => for (
-      lt <- go(left);
-      rt <- go(right);
-      () <- unify(lt, rt);
-      () <- if (op == Equal) unify(rt, _expr_) else pure(()): Analysis[Unit];
+      _left_ <- go(left);
+      _right_ <- go(right);
+      () <- unify(_left_, _right_);
+      () <- if (op == Equal) unify(_right_, _expr_) else pure(()): Analysis[Unit];
       () <- unify(_expr_, Type.Int)
     ) yield ()
     case CallFuncExpr(targetFun, args, _) => for (
@@ -102,8 +105,19 @@ case class TypeAnalysis(declarations: Declarations) {
     case Alloc(obj, _) => go(obj).flatMap(_obj_ => unify(_expr_, Type.Pointer(_obj_)))
     case VarRef(id, _) => go(id).flatMap(_id_ => unify(_expr_, Type.Pointer(_id_)))
     case Deref(pointer, _) => go(pointer).flatMap(_pointer_ => unify(Type.Pointer(_expr_), _pointer_))
-    case ast.Record(fields, span) => ???
-    case FieldAccess(record, field, span) => ???
+    case ast.Record(fields, _) => for (
+      typedFields <- WriterState.foldLeft(fields)(List[(String, Type)]())((acc, field) =>
+        go(field.expr).map(field.name -> _ :: acc)
+      );
+      () <- unify(_expr_, Type.Record(allFields.concat(typedFields).toMap))
+    ) yield ()
+    case FieldAccess(record, field, _) => for (
+      varsForFields <- WriterState.foldLeft(allFields)(Map[String, Type]()) {
+        case (acc, (name, _)) => fresh.map(freshVar => acc + (name -> freshVar))
+      };
+      _record_ <- go(record);
+      () <- unify(_record_, Type.Record(varsForFields + (field -> _expr_)))
+    ) yield ()
   }): Analysis[Unit]).map(_ => _expr_))
 
   def go(nestedStmt: StmtInNestedBlock): Analysis[Unit] = nestedStmt match {
@@ -131,6 +145,7 @@ case class TypeAnalysis(declarations: Declarations) {
   }
 
   private def readSolution(log: List[String], typeVars: Map[AstNode, Int], constraints: UnionFind[Type]): (List[String], Map[Decl, Type]) = {
+    // FIXME this entire thing is just a simple traversal and should be generalised (define sequence/traverse on Type)
     def resolve(x: Type): Option[Type] = x match {
       case Type.Pointer(t) => resolve(t).map(Type.Pointer)
       case Type.Function(params, ret) => for (
@@ -143,6 +158,11 @@ case class TypeAnalysis(declarations: Declarations) {
       case v: Type.Var if constraints.forest(v).find().x != v => resolve(constraints.forest(v).find().x)
       case _: Type.Var => None
       case Type.Int => Some(x)
+      case Type.AbsentField => ???
+      case Type.Mu(tVar, t) => ???
+      case Type.Record(fields) => fields.map(f => f._1 -> resolve(f._2)).foldLeft(Option(List[(String, Type)]())) {
+        case (acc, (name, opt)) => for (t <- opt; ts <- acc) yield (name -> t) :: ts
+      }.map(_.toMap).map(Type.Record)
     }
 
     val logBuf = log.toBuffer

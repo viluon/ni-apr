@@ -74,6 +74,39 @@ trait Examples {
       |  return z;
       | }
       |""".stripMargin
+
+  val ExampleTypeCheckingRecords: String = """
+      | main() {
+      |  var a,b,c,d;
+      |
+      |  a = {x: 1};
+      |  b = {x: &a};
+      |  c = {x: main};
+      |  d = {x: 1, y: &b};
+      |
+      |  return 0;
+      | }
+      |""".stripMargin
+
+  val ExampleTypeCheckingComplex: String = """
+      | list_append(list, x) {
+      |  var node;
+      |  node = alloc {v: x, prev: list, next: null};
+      |  if (list == null) {
+      |  } else {
+      |      (*list).next = node;
+      |  }
+      |
+      |   return node;
+      | }
+      |
+      | main(n) {
+      |   var list;
+      |   list = null;
+      |   list = list_append(list, 1);
+      |   return 0;
+      | }
+      |""".stripMargin
 }
 
 object Examples extends Examples

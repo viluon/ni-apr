@@ -20,7 +20,7 @@ trait Interpreter {
 
 object Interpreter {
   def apply(program: Program, stdin: Reader, stdout: Writer): Interpreter = {
-    val declarations = new SemanticAnalysis().analyze(program)
+    val (declarations, _) = new SemanticAnalysis().analyze(program)
     new BasicInterpreter(program, declarations, stdin, stdout)
   }
 }

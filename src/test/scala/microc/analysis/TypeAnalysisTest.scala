@@ -5,9 +5,21 @@ import microc.{Examples, Parsing}
 import munit.FunSuite
 
 class TypeAnalysisTest extends FunSuite with Parsing with Examples {
-  test("basic typechecking") {
+  test("pointers, references, IO all typecheck") {
     val res = analyze(ExampleTypeCheckingValid)
     assertMatches(res) {
+      case Right(types) => true
+    }
+  }
+
+  test("records typecheck") {
+    assertMatches(analyze(ExampleTypeCheckingRecords)) {
+      case Right(types) => true
+    }
+  }
+
+  test("linked lists typecheck") {
+    assertMatches(analyze(ExampleTypeCheckingComplex)) {
       case Right(types) => true
     }
   }
@@ -22,8 +34,8 @@ class TypeAnalysisTest extends FunSuite with Parsing with Examples {
   def analyze(code: String): Either[List[String], Map[Decl, Type]] = {
     val analysis = new SemanticAnalysis()
     val program = parseUnsafe(code)
-    val declarations = analysis.analyze(program)
-    val (errs, types) = TypeAnalysis(declarations).analyze(program)
+    val (declarations, fieldNames) = analysis.analyze(program)
+    val (errs, types) = TypeAnalysis(declarations, fieldNames).analyze(program)
     if (errs.nonEmpty) Left(errs)
     else Right(types)
   }
