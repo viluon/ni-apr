@@ -14,6 +14,12 @@ class TypeAnalysisTest extends FunSuite with Parsing with Examples {
     }
   }
 
+  test("simple recursive types") {
+    assertMatches(analyze("recursive types (simple)")) {
+      case Right(types) => true
+    }
+  }
+
   // TODO check the results properly, not just typecheck/error
 
   // ------------------------------------------------------------------
@@ -44,6 +50,7 @@ class TypeAnalysisTest extends FunSuite with Parsing with Examples {
       )
     }
     val (errs, types) = TypeAnalysis(declarations, fieldNames).analyze(program)
+    println(types.toList.map(p => p._1.toString + " = " + p._2).mkString("\n"))
     if (errs.nonEmpty) Left(errs)
     else Right(types)
   }

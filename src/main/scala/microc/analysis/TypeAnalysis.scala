@@ -146,37 +146,53 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
 
   private def readSolution(log: List[String], typeVars: Map[AstNode, Int], constraints: UnionFind[Type]): (List[String], Map[Decl, Type]) = {
     // FIXME this entire thing is just a simple traversal and should be generalised (define sequence/traverse on Type)
-    def resolve(x: Type): Option[Type] = x match {
-      case Type.Pointer(t) => resolve(t).map(Type.Pointer)
+    def resolve(x: Type, open: Set[Type]): Option[(Type, Boolean)] = x match {
+      case Type.Pointer(t) => resolve(t, open).map(r => (Type.Pointer(r._1), r._2))
       case Type.Function(params, ret) => for (
         // TODO probs reverse
-        resolvedParams <- params.map(resolve).foldLeft(Option(List[Type]()))(
-          (acc, opt) => for (t <- opt; ts <- acc) yield t :: ts
+        (resolvedParams, flag) <- params.map(resolve(_, open)).foldLeft(Option((List[Type](), false)))(
+          (acc, opt) => for ((t, flag) <- opt; (ts, flags) <- acc) yield (t :: ts, flag || flags)
         );
-        resolvedRet <- resolve(ret)
-      ) yield Type.Function(resolvedParams, resolvedRet)
-      case v: Type.Var if constraints.forest(v).find().x != v => resolve(constraints.forest(v).find().x)
-      case _: Type.Var => None
-      case Type.Int => Some(x)
-      case Type.AbsentField => Some(Type.AbsentField)
+        (resolvedRet, retFlag) <- resolve(ret, open)
+      ) yield (Type.Function(resolvedParams, resolvedRet), flag || retFlag)
+      case v: Type.Var if open contains v => Some((v, true)) // return, indicating recursive type
+      case v: Type.Var => constraints.forest.get(v) match {
+        case Some(node) =>
+          val canonical = node.find().x
+          if (canonical != v)
+            resolve(canonical, open + v) match {
+              case Some((sln, false)) => Some((sln, false))
+              case Some((typ, true)) => Some((Type.Mu(v, typ), false))
+              case None => None
+            }
+          else Some((v, false))
+        case None => Some((v, false))
+      }
+      case Type.Int => Some((x, false))
+      case Type.AbsentField => Some((Type.AbsentField, false))
       case Type.Mu(tVar, t) => ???
-      case Type.Record(fields) => fields.map(f => f._1 -> resolve(f._2)).foldLeft(Option(List[(String, Type)]())) {
-        case (acc, (name, opt)) => for (t <- opt; ts <- acc) yield (name -> t) :: ts
-      }.map(_.toMap).map(Type.Record)
+      case Type.Record(fields) => fields.map(f => f._1 -> resolve(f._2, open))
+        .foldLeft(Option((List[(String, Type)](), false))) {
+          case (acc, (name, opt)) => for ((t, flag) <- opt; (ts, flags) <- acc) yield ((name -> t) :: ts, flag || flags)
+        }.map(r => (r._1.toMap, r._2)).map(r => (Type.Record(r._1), r._2))
     }
 
     val logBuf = log.toBuffer
-    logBuf.toList -> typeVars.keys.flatMap {
+    val declToType = typeVars.keys.toList.flatMap {
       case decl: Decl =>
         val tVar = Type.Var(typeVars(decl))
-        resolve(tVar) match {
-          case Some(typ) => List(decl -> typ)
+        resolve(tVar, Set()) match {
+          case Some((typ, false)) => List(decl -> typ)
+          case Some((t, true)) =>
+            logBuf += s"failure during resolution of $tVar: did not close the recursive type $t"
+            Nil
           case None =>
             logBuf += s"failure during resolution of $tVar (for declaration $decl)"
             Nil
         }
       case _ => Nil
-    }.toMap
+    }
+    logBuf.toList -> declToType.toMap
   }
 
   def analyze(program: Program): (List[String], Map[Decl, Type]) = {

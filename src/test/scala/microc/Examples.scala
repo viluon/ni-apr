@@ -133,6 +133,12 @@ trait Examples {
            |  return 0;
            | }
            |""".stripMargin,
+    "recursive types (simple)"
+      -> """
+           | f(a) {
+           |   return f(a);
+           | }
+           |""".stripMargin,
     "recursive types (list)"
       -> """
            | list_append(list, x) {
