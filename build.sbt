@@ -6,7 +6,7 @@ version := "0.1"
 
 scalaVersion := "2.13.7"
 
-scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature")
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Werror")
 
 libraryDependencies += "org.scalameta" %% "munit" % "0.7.29" % Test
 

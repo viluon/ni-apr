@@ -1,7 +1,7 @@
 package microc.cli
 
 import microc.ProgramException
-import microc.analysis.SemanticAnalysis
+import microc.analysis.{SemanticAnalysis, TypeAnalysis}
 import microc.ast.JSONAstPrinter
 import microc.interpreter.BasicInterpreter
 import microc.parser.Parser
@@ -24,7 +24,7 @@ case object PrintHelpAction extends Action {
          |
          |actions:
          |  export [options] FILE  exports the microC program in FILE to JSON
-         |  
+         |
          |    options:
          |    --indent NUM         indent the result by NUM (default: no indent)
          |    --parser NAME        specify parser which parser to use
@@ -66,7 +66,7 @@ case class RunAction(file: File,
 
     try {
       val program = parser.parseProgram(source)
-      val declarations = new SemanticAnalysis().analyze(program)
+      val declarations = new SemanticAnalysis().analyze(program)._1
       val stdout = createOutput
       val interpreter = new BasicInterpreter(program, declarations, createInput, stdout)
       val status = interpreter.run()
@@ -127,6 +127,41 @@ case class ExportAction(file: File,
       }.get
 
       0
+    } catch {
+      case e: ProgramException =>
+        System.err.println(e.format(reporter))
+        1
+    }
+  }
+}
+
+case class TypeAction(file: File,
+                      parserName: String = Parser.DefaultParserName)
+  extends Action
+    with ParsingAction {
+  override def run(): Int = {
+    val source = readInput(file)
+    val reporter = new Reporter(source, Some(file.getPath))
+
+    try {
+      val program = parser.parseProgram(source)
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(program)
+      val (errs, types) = TypeAnalysis(declarations, fieldNames).analyze(program)
+
+      for ((decl, t) <- types) println(s"⟦$decl⟧ = $t")
+
+      errs match {
+        case mainErr :: additionalErrs =>
+          println("\nTypechecking failed:")
+          // FIXME using a singleton list here as handling multiple errors in the formatter is buggy atm
+          println(reporter.formatErrors(List(mainErr)))
+          if (additionalErrs.nonEmpty) {
+            println("\nadditional errors (may have been caused by the first error):")
+            for (err <- additionalErrs) println(reporter.formatErrors(List(err)))
+          }
+          2
+        case Nil => 0
+      }
     } catch {
       case e: ProgramException =>
         System.err.println(e.format(reporter))

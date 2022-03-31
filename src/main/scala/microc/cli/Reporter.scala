@@ -16,17 +16,23 @@ class Reporter(source: String, fileName: Option[String] = None) {
     val bar = " | "
     val noBar = "   "
     assert(bar.length == noBar.length)
+    val underline = '¯'
 
     val lines = (firstLine to lastLine).flatMap(line => {
       val lineNumber = s"% ${math.log10(lastLine).ceil.toInt}d".format(line)
       (lineNumber + bar + lineContent(line)) :: (errs.find(_.span.containsLine(line)) match {
         case Some(err) =>
-          val Span(from, to, hl) = err.span
+          val Span(from, to, maybeHl) = err.span
+          val hl = maybeHl.getOrElse(err.span)
           val startCol = if (from.line == line) from.col else 1
           val endCol = if (to.line == line) to.col else lineContent(line).length
           val width = endCol - startCol + 1
-          val prefix = " " * (lineNumber.length + (startCol - 1))
-          prefix + bar + "¯" * width :: (if (line == to.line) List(prefix + noBar + " " + err.msg) else Nil)
+          def prefix(str: String) = " " * lineNumber.length + str + " " * (startCol - 1)
+          def highlight(str: String) = str.zipWithIndex.map{
+            case (ch, i) if ch == underline && hl.containsPos(line, startCol + i) => '^'
+            case (ch, _) => ch
+          }.mkString
+          prefix(bar) + highlight(underline.toString * width) :: (if (line == to.line) List(prefix(noBar) + " " + err.msg) else Nil)
         case None => Nil
       })
     })

@@ -20,18 +20,18 @@ case class SemanticException(errors: List[SemanticError]) extends ProgramExcepti
   *
   * It checks the following:
   *   - [x] Use of an undeclared identifier.
-  *   - [ ] Duplicate identifiers.
+  *   - [x] Duplicate identifiers.
   *     note: there is a single namespace (shared by both functions and identifiers)
-  *   - [ ] Duplicate record field names.
-  *   - [ ] Assignment to a function.
-  *   - [ ] Getting address of a function.
+  *   - [x] Duplicate record field names.
+  *   - [x] Assignment to a function.
+  *   - [x] Getting address of a function.
   *
   * The result is a map of declarations, i.e., a map of identifiers to their declarations.
   *
   */
 class SemanticAnalysis {
   type Env = Map[String, Decl]
-  case class AnalyserSate(env: Env, decls: Declarations)
+  case class AnalyserSate(env: Env, decls: Declarations, fieldNames: Set[String])
   type Analysis[A] = ErrorState[List[SemanticError], AnalyserSate, A]
 
   // help type inference
@@ -73,9 +73,15 @@ class SemanticAnalysis {
     () <- setEnv(saved)
   ) yield a
 
-  def analyze(program: Program): Declarations = go(program)(AnalyserSate(Map(), Map())) match {
+  /**
+    * Catch semantic errors in the given program.
+    *
+    * @return The resolved references of all identifiers in the program.
+    *         The map's values are a subset of all program declarations, e.g. main() is often missing.
+    */
+  def analyze(program: Program): (Declarations, Set[String]) = go(program)(AnalyserSate(Map(), Map(), Set())) match {
     case Left(errs) => throw SemanticException(errs)
-    case Right((_, state)) => state.decls
+    case Right((_, state)) => (state.decls, state.fieldNames)
   }
 
   private def go(program: Program): Analysis[Unit] = for (
@@ -163,6 +169,7 @@ class SemanticAnalysis {
         case None => pure(acc + (field.name -> field))
       })
     }.flatMap(_ => goOverExprs(fields.map(_.expr)))
+      .flatMap(_ => get).flatMap(s => put(s.copy(fieldNames = s.fieldNames union fields.map(_.name).toSet)))
     case FieldAccess(record, _, _) => go(record)
   }
 

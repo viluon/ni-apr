@@ -63,6 +63,103 @@ trait Examples {
       |   return fac(5);
       | }
       |""".stripMargin
+
+  val TypeChecking: Map[String, String] = Map(
+    "pointers & I/O"
+      -> """
+           | f() {
+           |  var x, y, z;
+           |  x = input;
+           |  y = alloc x;
+           |  *y = x;
+           |  z = *y;
+           |  return z;
+           | }
+           |""".stripMargin,
+    "pointers & I/O invalid"
+      -> """
+           | f() {
+           |  var x, y, z;
+           |  x = input;
+           |  y = alloc x;
+           |  *y = x;
+           |  z = *y;
+           |  y = 1;
+           |  return z;
+           | }
+           |""".stripMargin,
+    "simple records"
+      -> """
+           | main() {
+           |  var a,b,c,d;
+           |
+           |  a = {x: 1};
+           |  b = {x: &a};
+           |  c = {x: main};
+           |  d = {x: 1, y: &b};
+           |
+           |  return 0;
+           | }
+           |""".stripMargin,
+    "simple records invalid"
+      -> """
+           | main() {
+           |  var a,b,c,d,e;
+           |
+           |  a = {x: 1};
+           |  b = {x: &a};
+           |  c = {x: main};
+           |  d = {x: 1, y: &b};
+           |  e = {y: 0};
+           |
+           |  output e.x;
+           |
+           |  return 0;
+           | }
+           |""".stripMargin,
+    "simple records 2"
+      -> """
+           | main() {
+           |  var a,b,c,d,e;
+           |
+           |  a = {x: 1};
+           |  b = {x: &a};
+           |  c = {x: main};
+           |  d = {x: 1, y: &b};
+           |  e = {y: &d};
+           |
+           |  output (*(*(*e.y).y).x).x;
+           |
+           |  return 0;
+           | }
+           |""".stripMargin,
+    "recursive types (simple)"
+      -> """
+           | f(a) {
+           |   return f(a);
+           | }
+           |""".stripMargin,
+    "recursive types (list)"
+      -> """
+           | list_append(list, x) {
+           |  var node;
+           |  node = alloc {v: x, prev: list, next: null};
+           |  if (list == null) {
+           |  } else {
+           |      (*list).next = node;
+           |  }
+           |
+           |   return node;
+           | }
+           |
+           | main(n) {
+           |   var list;
+           |   list = null;
+           |   list = list_append(list, 1);
+           |   return 0;
+           | }
+           |""".stripMargin,
+  )
 }
 
 object Examples extends Examples
