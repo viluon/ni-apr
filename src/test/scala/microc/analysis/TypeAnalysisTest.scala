@@ -14,8 +14,8 @@ class TypeAnalysisTest extends FunSuite with Parsing with Examples {
     }
   }
 
-  test("simple recursive types") {
-    assertMatches(analyze("recursive types (simple)")) {
+  test("recursive types (lists)") {
+    assertMatches(analyze("recursive types (list)")) {
       case Right(types) => true
     }
   }
@@ -28,13 +28,14 @@ class TypeAnalysisTest extends FunSuite with Parsing with Examples {
 
   type AnalysisResult = Either[List[String], Map[Decl, Type]]
 
+  private def unicodify(typedDecls: Map[Decl, Type]): List[String] = typedDecls.toList.map {
+    case (decl, typ) => s"⟦$decl⟧ = $typ"
+  }.sorted
+
   def assertMatches(x: AnalysisResult)(f: PartialFunction[AnalysisResult, Boolean]): Unit =
     assert(if (f.isDefinedAt(x)) f(x) else false, x match {
       case Left(errs) => errs.mkString("unexpected failure:\n", "\n", "")
-      case Right(typedDecls) =>
-        typedDecls.toList.map {
-          case (decl, typ) => s"⟦$decl⟧ = $typ"
-        }.sorted.mkString("unexpected success:\n", "\n", "")
+      case Right(typedDecls) => unicodify(typedDecls).mkString("unexpected success:\n", "\n", "")
     })
 
   def analyze(sampleName: String): AnalysisResult = {
@@ -50,8 +51,11 @@ class TypeAnalysisTest extends FunSuite with Parsing with Examples {
       )
     }
     val (errs, types) = TypeAnalysis(declarations, fieldNames).analyze(program)
-    println(types.toList.map(p => p._1.toString + " = " + p._2).mkString("\n"))
-    if (errs.nonEmpty) Left(errs)
+    println(unicodify(types).mkString("\n"))
+    if (errs.nonEmpty) Left(
+      reporter.formatErrors(errs.take(1))
+        :: (if (errs.size > 1) List(s"${errs.size - 1} additional error(s) won't be displayed") else Nil)
+    )
     else Right(types)
   }
 }

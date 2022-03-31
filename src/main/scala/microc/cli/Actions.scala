@@ -150,10 +150,18 @@ case class TypeAction(file: File,
 
       for ((decl, t) <- types) println(s"⟦$decl⟧ = $t")
 
-      println("\nerrors:")
-      for (err <- errs) println(err)
-
-      0
+      errs match {
+        case mainErr :: additionalErrs =>
+          println("\nTypechecking failed:")
+          // FIXME using a singleton list here as handling multiple errors in the formatter is buggy atm
+          println(reporter.formatErrors(List(mainErr)))
+          if (additionalErrs.nonEmpty) {
+            println("\nadditional errors (may have been caused by the first error):")
+            for (err <- additionalErrs) println(reporter.formatErrors(List(err)))
+          }
+          2
+        case Nil => 0
+      }
     } catch {
       case e: ProgramException =>
         System.err.println(e.format(reporter))
