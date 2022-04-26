@@ -16,6 +16,7 @@ libraryDependencies += "org.typelevel" %% "simulacrum" % "1.0.1"
 libraryDependencies += "org.typelevel" %% "cats-core" % "2.7.0"
 libraryDependencies += "org.typelevel" %% "kittens" % "2.3.2"
 libraryDependencies += "org.jetbrains" % "annotations" % "23.0.0"
+libraryDependencies += "com.chuusai" % "shapeless_2.13" % "2.4.0-M1"
 
 addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full)
 

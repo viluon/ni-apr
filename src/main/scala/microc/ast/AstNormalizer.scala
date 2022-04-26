@@ -3,6 +3,7 @@ package microc.ast
 import cats.data.{State, WriterT}
 import cats.syntax.bifunctor._
 import cats.{Monad, Traverse}
+import shapeless.prism
 
 object AstNormalizer {
   def normalize(program: Program): Program = Program(
@@ -76,7 +77,7 @@ object AstNormalizer {
         (s, log) = _s
       } yield
         if (log.isEmpty) s
-        else nest(s :: log, span)
+        else nest(log :+ s, span)
     ).map(nest(_, span))
     case IfStmt(guard, thenBranch, elseBranch, span) => for {
       _g <- bake(bind(guard))
@@ -97,9 +98,12 @@ object AstNormalizer {
       (g, gLog) = _g
       _b <- bake(normalizeStmt(block))
       (b, bLog) = _b
-    } yield nest(gLog :+ WhileStmt(g, nest((bLog :+ b) ++ gLog, block.span), span), span)
+    } yield nest(gLog :+ WhileStmt(g, nest((bLog :+ b) ++ gLog.map(cloneStmt(span)), block.span), span), span)
     case OutputStmt(expr, span) => bind(expr).map(OutputStmt(_, span))
   }
+
+  private def cloneStmt(span: Span)(stmt: StmtInNestedBlock): StmtInNestedBlock =
+    prism[StmtInNestedBlock].span.modify(stmt)((s: Span) => span ++ s)
 
   private def addStmt(stmt: StmtInNestedBlock): Normalizing[Unit] = WriterT.tell(List((true, stmt)))
 
