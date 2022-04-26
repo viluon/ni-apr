@@ -4,11 +4,20 @@ name := "microc"
 
 version := "0.1"
 
-scalaVersion := "2.13.7"
+scalaVersion := "2.13.8"
 
-scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Werror")
+scalacOptions ++= Seq("-unchecked", "-deprecation", "-feature", "-Werror", "-Ymacro-annotations")
 
 libraryDependencies += "org.scalameta" %% "munit" % "0.7.29" % Test
+libraryDependencies += "org.scalacheck" %% "scalacheck" % "1.15.4" % "test"
+libraryDependencies += "org.scalactic" %% "scalactic" % "3.2.11"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.2.11" % "test"
+libraryDependencies += "org.typelevel" %% "simulacrum" % "1.0.1"
+libraryDependencies += "org.typelevel" %% "cats-core" % "2.7.0"
+libraryDependencies += "org.typelevel" %% "kittens" % "2.3.2"
+libraryDependencies += "org.jetbrains" % "annotations" % "23.0.0"
+
+addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full)
 
 testFrameworks += new TestFramework("munit.Framework")
 

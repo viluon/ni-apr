@@ -15,6 +15,10 @@ case class Loc(line: Int, col: Int) extends Ordered[Loc] {
   }
 }
 
+object Loc {
+  val invalid = Loc(-1, -1)
+}
+
 case class Span(from: Loc, to: Loc, highlight: Option[Span] = None) extends Ordered[Span] {
   def containsPos(line: Int, col: Int): Boolean = containsLine(line) &&
     ((if (line == from.line) from.col else 0) to (if (line == to.line) to.col else Int.MaxValue)).contains(col)
@@ -33,6 +37,10 @@ case class Span(from: Loc, to: Loc, highlight: Option[Span] = None) extends Orde
   }
 
   def highlighting(hl: Span): Span = copy(highlight = Some(hl))
+}
+
+object Span {
+  val invalid: Span = Span(Loc.invalid, Loc.invalid)
 }
 
 /** A binary operator */
