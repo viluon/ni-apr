@@ -11,7 +11,10 @@ object AstNormalizer {
 
   private case class FreshStore(k: Int)
   private type VariableStore[A] = State[FreshStore, A]
-  private type Normalizing[A] = WriterT[VariableStore, List[StmtInNestedBlock], A]
+  private type Normalizing[A] = WriterT[VariableStore, List[(
+    Boolean /*true if the statement should be emitted*/,
+      StmtInNestedBlock
+    )], A]
 
   private def fresh: Normalizing[Identifier] = WriterT.liftF(for {
     store <- State.get
@@ -20,50 +23,99 @@ object AstNormalizer {
 
   private def normalizeFun(decl: FunDecl): VariableStore[FunDecl] = decl match {
     case FunDecl(name, params, block, span) =>
-      val normalized = Traverse[List].traverse(block.stmts)(normalizeStmt)
+      val normalized = for {
+        body <- Traverse[List].traverse(block.stmts)(normalizeStmt)
+        ret <- bind(block.ret.expr)
+      } yield (body, ret)
       for {
-        pair <- normalized.run.map(_.leftMap(_.map {
-          case AssignStmt(DirectWrite(Identifier(name, idSpan), _), _, span) =>
-            VarStmt(List(IdentifierDecl(name, idSpan)), span)
-          case _ => ???
-        }))
-        (newVars, stmts) = pair
-      } yield FunDecl(name, params, FunBlockStmt(block.vars ++ newVars, stmts, block.ret, block.span), span)
+        result <- normalized.run
+        (newVars, (originalStmts, ret)) = result.leftMap(_.flatMap {
+          case (_, AssignStmt(DirectWrite(Identifier(name, idSpan), _), _, _)) =>
+            List(IdentifierDecl(name, idSpan))
+          case _ => throw new IllegalStateException(
+            "normalization wrote a statement for which variable extraction logic isn't implemented"
+          )
+        })
+        body = FunBlockStmt(
+          block.vars :+ VarStmt(newVars, Span.invalid),
+          result._1.filter(_._1).map(_._2) ++ originalStmts,
+          block.ret.copy(expr = ret),
+          block.span
+        )
+      } yield FunDecl(name, params, body, span)
   }
 
   private def normalizeAssignment(stmt: AssignStmt): Normalizing[StmtInNestedBlock] = stmt.left match {
-    case DirectWrite(_, _) | DirectFieldWrite(_, _, _) => normalizeExpr(stmt.right).map(AssignStmt(stmt.left, _, stmt.span))
-    case IndirectFieldWrite(expr, field, span) => ???
-    case IndirectWrite(expr, span) => ???
+    case DirectWrite(_, _) | DirectFieldWrite(_, _, _) => bind(stmt.right).map(AssignStmt(stmt.left, _, stmt.span))
+    case IndirectWrite(_, _) | IndirectFieldWrite(_, _, _) => for {
+      lhs <- bind(stmt.left)
+      rhs <- bind(stmt.right)
+    } yield AssignStmt(lhs, rhs, stmt.span)
     case _ => throw new IllegalStateException()
+  }
+
+  /**
+    * Bake statements created by a normalizing operation.
+    * Empties the writer's log and returns it.
+    */
+  private def bake[A](x: Normalizing[A]): Normalizing[(A, List[StmtInNestedBlock])] =
+    WriterT.listen(x).mapWritten(_.map(p => (false, p._2))).map(p => (p._1, p._2.filter(_._1).map(_._2)))
+
+  private def nest(stmts: List[StmtInNestedBlock], span: Span): StmtInNestedBlock = stmts match {
+    case List(stmt) => stmt
+    case List(n: NestedBlockStmt, m: NestedBlockStmt) => NestedBlockStmt(n.body ++ m.body, span)
+    case List(n: NestedBlockStmt, x) => NestedBlockStmt(n.body :+ x, span)
+    case _ => NestedBlockStmt(stmts, span)
   }
 
   private def normalizeStmt(stmt: StmtInNestedBlock): Normalizing[StmtInNestedBlock] = stmt match {
     case stmt: AssignStmt => normalizeAssignment(stmt)
-    case NestedBlockStmt(body, span) => Traverse[List].traverse(body)(normalizeStmt).map(NestedBlockStmt(_, span))
+    case NestedBlockStmt(body, span) => Traverse[List].traverse(body)(stmt =>
+      for {
+        _s <- bake(normalizeStmt(stmt))
+        (s, log) = _s
+      } yield
+        if (log.isEmpty) s
+        else nest(s :: log, span)
+    ).map(nest(_, span))
     case IfStmt(guard, thenBranch, elseBranch, span) => for {
-      g <- normalizeExpr(guard)
-      thn <- normalizeStmt(thenBranch)
-      els <- Traverse[Option].traverse(elseBranch)(normalizeStmt)
-    } yield IfStmt(g, thn, els, span)
+      _g <- bake(bind(guard))
+      (g, guardLog) = _g
+      _thn <- bake(normalizeStmt(thenBranch))
+      (thn, thnLog) = _thn
+      _els <- bake(Traverse[Option].traverse(elseBranch)(normalizeStmt))
+      (els, elsLog) = _els
+    } yield
+        nest(guardLog :+ IfStmt(
+          g,
+          nest(thnLog :+ thn, thenBranch.span),
+          els.map(e => nest(elsLog :+ e, e.span)),
+          span
+        ), span)
     case WhileStmt(guard, block, span) => for {
-      g <- normalizeExpr(guard)
-      b <- normalizeStmt(block)
-    } yield WhileStmt(g, b, span)
-    case OutputStmt(expr, span) => normalizeExpr(expr).map(OutputStmt(_, span))
+      _g <- bake(bind(guard))
+      (g, gLog) = _g
+      _b <- bake(normalizeStmt(block))
+      (b, bLog) = _b
+    } yield nest(gLog :+ WhileStmt(g, nest((bLog :+ b) ++ gLog, block.span), span), span)
+    case OutputStmt(expr, span) => bind(expr).map(OutputStmt(_, span))
   }
 
-  private def addStmt(stmt: StmtInNestedBlock): Normalizing[Unit] = WriterT.tell(List(stmt))
+  private def addStmt(stmt: StmtInNestedBlock): Normalizing[Unit] = WriterT.tell(List((true, stmt)))
 
-  private def bind(expr: Expr): Normalizing[Expr] = for {
-    name <- fresh
-    expr <- normalizeExpr(expr)
-    _ <- addStmt(AssignStmt(name, expr, expr.span))
-  } yield name
+  private def bind(expr: Expr): Normalizing[Expr] = expr match {
+    case _: Identifier | _: Number | _: Input | _: Null => Monad[Normalizing].pure(expr)
+    case _ => for {
+      name <- fresh
+      expr <- normalizeExpr(expr)
+      _ <- addStmt(AssignStmt(name, expr, expr.span))
+    } yield name
+  }
 
   private def normalizeExpr(expr: Expr): Normalizing[Expr] = expr match {
-    case Null(_) | Input(_) | VarRef(_, _) | Number(_, _) | Identifier(_, _) => Monad[Normalizing].pure(expr)
-//    case Alloc(Identifier(_, _), _) | Deref(Identifier(_, _), _) => expr
+    case Null(_) | Input(_) | Number(_, _) | Identifier(_, _) =>
+      throw new IllegalStateException("calls to normalizeExpr should only come from bind, which must handle these cases")
+    case VarRef(id, span) => Monad[Normalizing].pure(VarRef(id, span))
     case Alloc(expr, span) => bind(expr).map(Alloc(_, span))
     case Deref(pointer, span) => bind(pointer).map(Deref(_, span))
     case Record(fields, span) => Traverse[List].traverse(fields) {
