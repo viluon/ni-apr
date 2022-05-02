@@ -94,7 +94,7 @@ object AstNormalizer {
           span
         ), span)
     case WhileStmt(guard, block, span) => for {
-      _g <- bake(bind(guard))
+      _g <- bake(bind(guard, true))
       (g, gLog) = _g
       _b <- bake(normalizeStmt(block))
       (b, bLog) = _b
@@ -107,8 +107,23 @@ object AstNormalizer {
 
   private def addStmt(stmt: StmtInNestedBlock): Normalizing[Unit] = WriterT.tell(List((true, stmt)))
 
-  private def bind(expr: Expr): Normalizing[Expr] = expr match {
-    case _: Identifier | _: Number | _: Input | _: Null => Monad[Normalizing].pure(expr)
+  private object SimpleExpr {
+    def unapply(expr: Expr): Boolean = expr match {
+      case _: Identifier | _: Number | _: Null => true
+      case _ => false
+    }
+  }
+
+  /**
+    * Simplify an expression and bind its result to a (usually fresh) variable.
+    * The expression is returned as-is if it is considered simple enough.
+    * @param expr The expression to simplify.
+    * @param force Force a simplification of simple binary operations (single level with simple operands).
+    * @return The simplified expression.
+    */
+  private def bind(expr: Expr, force: Boolean = false): Normalizing[Expr] = expr match {
+    case SimpleExpr() => Monad[Normalizing].pure(expr)
+    case BinaryOp(_, SimpleExpr(), SimpleExpr(), _) if !force => Monad[Normalizing].pure(expr)
     case _ => for {
       name <- fresh
       expr <- normalizeExpr(expr)
@@ -128,7 +143,7 @@ object AstNormalizer {
     case FieldAccess(record, field, span) => bind(record).map(FieldAccess(_, field, span))
     case CallFuncExpr(targetFun, args, span) => for {
       tf <- bind(targetFun)
-      args <- Traverse[List].traverse(args)(bind)
+      args <- Traverse[List].traverse(args)(e => bind(e))
     } yield CallFuncExpr(tf, args, span)
     case BinaryOp(operator, left, right, span) => for {
       l <- bind(left)
