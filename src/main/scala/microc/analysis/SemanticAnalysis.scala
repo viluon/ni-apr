@@ -53,8 +53,9 @@ class SemanticAnalysis {
   private def addDecls(d: Declarations): Analysis[Unit] =
     get.flatMap(state => d.foldLeft(pure(state.decls)) {
       case (ctx, kv@(id, decl)) => ctx.flatMap(acc => acc.get(id) match {
-        case Some(previousDecl) => crash(s"redeclaration of ${decl.name}, previously declared at ${previousDecl.span}", decl.span)
-        case None => pure(acc + kv)
+        case Some(previousDecl) if false && previousDecl.span != Span.invalid =>
+          crash(s"redeclaration of ${decl.name}, previously declared at ${previousDecl.span}", decl.span)
+        case _ => pure(acc + kv)
       })
     }.flatMap(declarations))
 

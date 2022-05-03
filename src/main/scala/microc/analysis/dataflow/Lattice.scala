@@ -1,16 +1,18 @@
-package microc.analysis
+package microc.analysis.dataflow
 
 trait Lattice[E] {
   def top: E
   def bot: E
   def lub(a: E, b: E): E
-  def glb(a: E, b: E): E
+  def glb(a: E, b: E): E = Lattice.invLat(this).lub(a, b)
+  def leq(a: E, b: E): Boolean
 }
 
 object Lattice {
   implicit class LatOps[E](x: E)(implicit l: Lattice[E]) {
     def ⊔(y: E): E = l.lub(x, y)
     def ⊓(y: E): E = l.glb(x, y)
+    def ⊑(y: E): Boolean = l.leq(x, y)
   }
 
   sealed trait FlatLat[A]
@@ -45,6 +47,14 @@ object Lattice {
       }
       case _: FlatLat.Top[A] => b
     }
+
+    override def leq(a: FlatLat[A], b: FlatLat[A]): Boolean = a -> b match {
+      case (FlatLat.Top(), FlatLat.Top()) => true
+      case (FlatLat.Mid(x), FlatLat.Mid(y)) if x == y => true
+      case (FlatLat.Mid(_), FlatLat.Top()) => true
+      case (FlatLat.Bot(), _) => true
+      case _ => false
+    }
   }
 
   def mapLat[A, B](s: Iterable[A], l: Lattice[B]): Lattice[Map[A, B]] = new Lattice[Map[A, B]] {
@@ -53,6 +63,7 @@ object Lattice {
     override val bot: Map[A, B] = s.map(_ -> l.bot).toMap
     override def lub(a: Map[A, B], b: Map[A, B]): Map[A, B] = a.transform((k, x) => x ⊔ b(k))
     override def glb(a: Map[A, B], b: Map[A, B]): Map[A, B] = a.transform((k, x) => x ⊓ b(k))
+    override def leq(a: Map[A, B], b: Map[A, B]): Boolean = a.forall { case (k, x) => x ⊑ b(k) }
   }
 
   sealed trait LiftLat[A]
@@ -64,6 +75,8 @@ object Lattice {
   }
 
   def liftLat[A](l: Lattice[A]): Lattice[LiftLat[A]] = new Lattice[LiftLat[A]] {
+    private implicit def lat: Lattice[A] = l
+
     override val top: LiftLat[A] = LiftLat.Off(l.top)
     override val bot: LiftLat[A] = LiftLat.Bot()
     override def lub(a: LiftLat[A], b: LiftLat[A]): LiftLat[A] = a match {
@@ -82,5 +95,19 @@ object Lattice {
         case _: LiftLat.Off[A] => bot
       }
     }
+
+    override def leq(a: LiftLat[A], b: LiftLat[A]): Boolean = a -> b match {
+      case (LiftLat.Off(x), LiftLat.Off(y)) => x ⊑ y
+      case (LiftLat.Bot(), _) => true
+      case _ => false
+    }
+  }
+
+  def invLat[A](l: Lattice[A]): Lattice[A] = new Lattice[A] {
+    override val top: A = l.bot
+    override val bot: A = l.top
+    override def lub(a: A, b: A): A = l.glb(a, b)
+    override def glb(a: A, b: A): A = l.lub(a, b)
+    override def leq(a: A, b: A): Boolean = l.leq(b, a)
   }
 }

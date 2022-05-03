@@ -6,12 +6,15 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 
 object Cfg {
-  implicit class CfgOps(val node: AstNode)(implicit cfg: Cfg) {
-    def pred: Set[AstNode] = ???
-    def succ: Set[AstNode] = cfg.graph(Right(node)).flatMap {
-      case Left(_) => Set()
-      case Right(node) => Set(node)
-    }
+  def swapSourceSink(n: CfgNode): CfgNode = n match {
+    case Left(Sink) => Left(Source)
+    case Left(Source) => Left(Sink)
+    case x => x
+  }
+
+  implicit class CfgOps(val node: CfgNode)(implicit cfg: Cfg) {
+    def pred: Set[CfgNode] = cfg.inverted.graph.withDefaultValue(Set())(swapSourceSink(node))
+    def succ: Set[CfgNode] = cfg.graph.withDefaultValue(Set())(node)
   }
 
   sealed trait CfgSpecialNode
@@ -22,6 +25,12 @@ object Cfg {
   case class Cfg(graph: Map[CfgNode, Set[CfgNode]]) {
     if (graph.contains(Left(Sink))) throw new IllegalStateException("the sink isn't a sink!")
     if (graph.values.exists(_.contains(Left(Source)))) throw new IllegalStateException("the source isn't a source!")
+
+    lazy val nodes: Set[CfgNode] = graph.keySet ++ graph.values.reduce(_ ++ _)
+    // TODO scalacheck that cfg.inverted.inverted == cfg
+    lazy val inverted: Cfg =
+      Cfg((for ((k, vs) <- graph.toSeq; v <- vs) yield (swapSourceSink(v), swapSourceSink(k)))
+        .groupMapReduce(_._1)(p => Set(p._2))(_ ++ _))
 
     def compose(other: Cfg): Cfg = {
       val keptHere = graph.toSeq.map(p => (p._1, p._2.filterNot(_ == Left(Sink))))
@@ -50,18 +59,20 @@ object Cfg {
       }
     )
 
-    def toDot: String = {
+    def toDot: String = toDot(Map())
+
+    def toDot(extras: Map[CfgNode, String]): String = {
       val sb = new mutable.StringBuilder
       val numbering = mutable.Map[CfgNode, Int]()
       def name(node: CfgNode): String = "n_" + numbering.getOrElseUpdate(node, numbering.size)
 
       sb.append("digraph CFG {\n")
       for (node <- (graph.values.flatten ++ graph.keys).toSet[CfgNode]) {
-        val label = node match {
+        val label = (node match {
           case Left(Source) => "source"
           case Left(Sink) => "sink"
           case Right(node) => node.toString
-        }
+        }) + " " + extras.getOrElse(node, "")
         sb.append(s"${name(node)}[label=\"$label\"]\n")
         for (s <- graph.withDefaultValue(Set())(node)) sb.append(name(node) + "->" + name(s) + "\n")
         sb.append('\n')
