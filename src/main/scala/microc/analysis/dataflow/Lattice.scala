@@ -17,8 +17,12 @@ object Lattice {
 
   sealed trait FlatLat[A]
   object FlatLat {
-    case class Top[A]() extends FlatLat[A]
-    case class Bot[A]() extends FlatLat[A]
+    case class Top[A]() extends FlatLat[A] {
+      override def toString: String = "T"
+    }
+    case class Bot[A]() extends FlatLat[A] {
+      override def toString: String = "_|_"
+    }
     case class Mid[A](x: A) extends FlatLat[A]
   }
 

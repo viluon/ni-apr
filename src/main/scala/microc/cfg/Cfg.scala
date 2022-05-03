@@ -13,7 +13,7 @@ object Cfg {
   }
 
   implicit class CfgOps(val node: CfgNode)(implicit cfg: Cfg) {
-    def pred: Set[CfgNode] = cfg.inverted.graph.withDefaultValue(Set())(swapSourceSink(node))
+    def pred: Set[CfgNode] = cfg.inverted.graph.withDefaultValue(Set())(swapSourceSink(node)).map(swapSourceSink)
     def succ: Set[CfgNode] = cfg.graph.withDefaultValue(Set())(node)
   }
 

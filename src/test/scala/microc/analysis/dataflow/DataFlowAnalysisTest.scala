@@ -8,7 +8,7 @@ import microc.cfg.Cfg.CfgNode
 import munit.FunSuite
 
 class DataFlowAnalysisTest extends FunSuite with Parsing {
-  test("CFG generation should correspond to the official example") {
+  test("Constant analysis should produce meaningful results") {
     val ast = AstNormalizer.normalize(parseUnsafe(
       """ite(n) {
         |  var f;
@@ -37,7 +37,7 @@ class DataFlowAnalysisTest extends FunSuite with Parsing {
       def eval(state: NodeState, expr: Expr): VariableState = expr match {
         case microc.ast.Number(k, _) => Lattice.FlatLat.Mid(k)
         case id: Identifier => state(decls(id))
-        case BinaryOp(op, left: Identifier, right: Identifier, _) => state(decls(left)) -> state(decls(right)) match {
+        case BinaryOp(op, left: Identifier, right: Identifier, _) => (state(decls(left)), state(decls(right))) match {
           case (Lattice.FlatLat.Mid(x), Lattice.FlatLat.Mid(y)) => Lattice.FlatLat.Mid(op match {
             case Plus => x + y
             case Minus => x - y
@@ -59,6 +59,19 @@ class DataFlowAnalysisTest extends FunSuite with Parsing {
     }
 
     val constants = ConstantAnalysis.fixpoint(cfg)
-    println(cfg.toDot(constants.view.mapValues("\\n" + _.map(p => p._1.name + ": " + p._2).mkString("{", ",", "}")).toMap))
+    println(cfg.toDot(
+      constants.view.mapValues(
+        "\\n" + _.map(p => p._1.name + ": " + p._2).mkString("{", ",", "}")
+      ).toMap
+    ))
+  }
+
+  test("Map lattices should have a correct least upper bound") {
+    val variables = List("a", "b", "c")
+    val vLat = Lattice.flatLat
+    val nodeLat = Lattice.mapLat(variables, vLat)
+    println(
+      variables.foldLeft(nodeLat.bot)((acc, v) => acc.updated(v, vLat.bot))
+    )
   }
 }
