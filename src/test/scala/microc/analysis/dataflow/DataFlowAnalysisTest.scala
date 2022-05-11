@@ -2,12 +2,19 @@ package microc.analysis.dataflow
 
 import microc.Parsing
 import microc.analysis.SemanticAnalysis
-import microc.ast.{AssignStmt, AstNormalizer, BinaryOp, DirectWrite, Divide, Equal, Expr, GreaterThan, Identifier, Minus, Plus, Times, VarStmt}
+import microc.ast.AstNormalizer
 import microc.cfg.Cfg
-import microc.cfg.Cfg.CfgNode
 import munit.FunSuite
+import org.scalacheck.Prop.forAll
+import org.scalacheck.Properties
 
 class DataFlowAnalysisTest extends FunSuite with Parsing {
+  object TransferMonotonicity extends Properties("transfer function") {
+    property("monotonic") = forAll { (cfg: Cfg.Cfg) =>
+      ???
+    }(implicitly, ???, implicitly, ???)
+  }
+
   test("Constant analysis should produce meaningful results") {
     val ast = AstNormalizer.normalize(parseUnsafe(
       """ite(n) {
@@ -20,45 +27,11 @@ class DataFlowAnalysisTest extends FunSuite with Parsing {
         |  return f;
         |}
         |""".stripMargin))
-    val semAnl = new SemanticAnalysis()
-    val (decls, _) = semAnl.analyze(ast)
+    val (decls, _) = new SemanticAnalysis().analyze(ast)
     val cfg = Cfg.convert(ast)
 
-    case object ConstantAnalysis extends DataFlowAnalysis with FixpointComputation.Naive {
-      override type VariableState = Lattice.FlatLat[Int]
-      override val vLat: Lattice[VariableState] = Lattice.flatLat[Int]
-      override val nodeLat: Lattice[NodeState] = Lattice.mapLat(decls.values, vLat)
-      override val programLat: Lattice[ProgramState] = Lattice.mapLat(cfg.nodes, nodeLat)
+    val constants = new ConstantAnalysis(decls, cfg).fixpoint()
 
-      override val dir: DataFlowAnalysis.Direction = DataFlowAnalysis.Direction.Forward
-      override val mayMust: DataFlowAnalysis.MayMust = DataFlowAnalysis.MayMust.Must
-
-      private implicit def vl: Lattice[VariableState] = vLat
-      def eval(state: NodeState, expr: Expr): VariableState = expr match {
-        case microc.ast.Number(k, _) => Lattice.FlatLat.Mid(k)
-        case id: Identifier => state(decls(id))
-        case BinaryOp(op, left: Identifier, right: Identifier, _) => (state(decls(left)), state(decls(right))) match {
-          case (Lattice.FlatLat.Mid(x), Lattice.FlatLat.Mid(y)) => Lattice.FlatLat.Mid(op match {
-            case Plus => x + y
-            case Minus => x - y
-            case Times => x * y
-            case Divide => x / y
-            case Equal => if (x == y) 1 else 0
-            case GreaterThan => if (x > y) 1 else 0
-          })
-          case (a, b) => a ⊔ b
-        }
-        case _ => vLat.top
-      }
-
-      override def transfer(node: CfgNode, state: NodeState): NodeState = node match {
-        case Right(VarStmt(ids, _)) => ids.foldLeft(state)((acc, id) => acc.updated(id, vLat.bot))
-        case Right(AssignStmt(DirectWrite(id, _), rhs, _)) => state.updated(decls(id), eval(state, rhs))
-        case _ => state
-      }
-    }
-
-    val constants = ConstantAnalysis.fixpoint(cfg)
     println(cfg.toDot(
       constants.view.mapValues(
         "\\n" + _.map(p => p._1.name + ": " + p._2).mkString("{", ",", "}")

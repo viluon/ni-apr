@@ -26,11 +26,18 @@ object Cfg {
     if (graph.contains(Left(Sink))) throw new IllegalStateException("the sink isn't a sink!")
     if (graph.values.exists(_.contains(Left(Source)))) throw new IllegalStateException("the source isn't a source!")
 
-    lazy val nodes: Set[CfgNode] = graph.keySet ++ graph.values.reduce(_ ++ _)
+    var invertedCache: Option[Cfg] = None
+    lazy val nodes: Set[CfgNode] = invertedCache.map(_.nodes).getOrElse(graph.keySet ++ graph.values.reduce(_ ++ _))
     // TODO scalacheck that cfg.inverted.inverted == cfg
-    lazy val inverted: Cfg =
-      Cfg((for ((k, vs) <- graph.toSeq; v <- vs) yield (swapSourceSink(v), swapSourceSink(k)))
-        .groupMapReduce(_._1)(p => Set(p._2))(_ ++ _))
+    lazy val inverted: Cfg = {
+      val inv = invertedCache.getOrElse(
+        Cfg((for ((k, vs) <- graph.toSeq; v <- vs) yield (swapSourceSink(v), swapSourceSink(k)))
+          .groupMapReduce(_._1)(p => Set(p._2))(_ ++ _))
+      )
+      invertedCache = Some(inv)
+      inv.invertedCache = Some(this)
+      inv
+    }
 
     def compose(other: Cfg): Cfg = {
       val keptHere = graph.toSeq.map(p => (p._1, p._2.filterNot(_ == Left(Sink))))

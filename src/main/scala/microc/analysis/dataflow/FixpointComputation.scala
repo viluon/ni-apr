@@ -1,31 +1,25 @@
 package microc.analysis.dataflow
 
-import microc.analysis.dataflow.DataFlowAnalysis.{Direction, MayMust}
+import microc.ast.Identifier
 import microc.cfg.Cfg
 
+trait FixpointComputation { self: DataFlowAnalysis =>
+  def fixpoint(program: Cfg.Cfg): ProgramState
+}
+
 object FixpointComputation {
-  trait Naive { self: DataFlowAnalysis =>
+  trait Naive extends FixpointComputation { self: DataFlowAnalysis =>
     private implicit def pl: Lattice[ProgramState] = programLat
-    private implicit def nl: Lattice[NodeState] = nodeLat
+    private implicit def nl: Lattice[AbstractEnv] = nodeLat
     import Lattice.LatOps
 
     def fixpoint(program: Cfg.Cfg): ProgramState = {
       implicit def cfg: Cfg.Cfg = program
       import Cfg.CfgOps
 
-      def join(node: Cfg.CfgNode, state: ProgramState): NodeState = {
-        // FIXME move these matches out to smart analysis constructors
-        val pred = dir match {
-          case Direction.Forward => node.pred
-          case Direction.Backward => node.succ
-        }
-        pred.foldLeft(nodeLat.bot)(
-          (acc, node) => mayMust match {
-            case MayMust.May => acc ⊓ state(node)
-            case MayMust.Must => acc ⊔ state(node)
-          }
-        )
-      }
+      def join(node: Cfg.CfgNode, state: ProgramState): AbstractEnv = node.pred.foldLeft(nodeLat.bot)(
+        (acc, node) => acc ⊔ state(node)
+      )
 
       def step(prevState: ProgramState): ProgramState = program.nodes.foldLeft(prevState)(
         (state, node) => state.updated(node, transfer(node, join(node, prevState)))

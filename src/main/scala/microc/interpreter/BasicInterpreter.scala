@@ -240,15 +240,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     val span = left.span ++ right.span
     for (lv <- eval(left); rv <- eval(right))
       yield (lv, rv) match {
-        case (IntVal(l), IntVal(r)) =>
-          pure(IntVal(operator match {
-            case Plus => l + r
-            case Minus => l - r
-            case Times => l * r
-            case Divide => l / r
-            case Equal => if (l == r) 1 else 0
-            case GreaterThan => if (l > r) 1 else 0
-          }))
+        case (IntVal(l), IntVal(r)) => pure(IntVal(operator.eval(l, r)))
         case (x@(NullVal | AddrVal(_) | FunAddrVal(_)), y@(NullVal | AddrVal(_) | FunAddrVal(_)))
           if operator == Equal => pure(IntVal(if (x == y) 1 else 0))
         case (x, y) if operator == Equal =>

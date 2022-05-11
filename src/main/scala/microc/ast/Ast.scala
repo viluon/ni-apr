@@ -44,7 +44,16 @@ object Span {
 }
 
 /** A binary operator */
-sealed trait BinaryOperator
+sealed trait BinaryOperator {
+  def eval(l: Int, r: Int): Int = this match {
+    case Plus => l + r
+    case Minus => l - r
+    case Times => l * r
+    case Divide => l / r
+    case Equal => if (l == r) 1 else 0
+    case GreaterThan => if (l > r) 1 else 0
+  }
+}
 
 object BinaryOperator {
   def apply(s: String): BinaryOperator = s match {

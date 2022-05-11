@@ -4,7 +4,7 @@ trait Lattice[E] {
   def top: E
   def bot: E
   def lub(a: E, b: E): E
-  def glb(a: E, b: E): E = Lattice.invLat(this).lub(a, b)
+  def glb(a: E, b: E): E
   def leq(a: E, b: E): Boolean
 }
 
@@ -14,6 +14,9 @@ object Lattice {
     def ⊓(y: E): E = l.glb(x, y)
     def ⊑(y: E): Boolean = l.leq(x, y)
   }
+
+  def ⊤[E](implicit l: Lattice[E]): E = l.top
+  def ⊥[E](implicit l: Lattice[E]): E = l.bot
 
   sealed trait FlatLat[A]
   object FlatLat {

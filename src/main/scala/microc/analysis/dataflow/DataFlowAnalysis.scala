@@ -1,30 +1,36 @@
 package microc.analysis.dataflow
 
+import microc.analysis.Declarations
 import microc.ast.Decl
+import microc.cfg.Cfg
 import microc.cfg.Cfg.CfgNode
 
 trait DataFlowAnalysis {
-  type VariableState
-  type NodeState = Map[Decl, VariableState]
-  type ProgramState = Map[CfgNode, NodeState]
+  type AbstractValue
+  type AbstractEnv = Map[Decl, AbstractValue]
+  type ProgramState = Map[CfgNode, AbstractEnv]
 
-  def vLat: Lattice[VariableState]
-  def nodeLat: Lattice[NodeState]
+  def vLat: Lattice[AbstractValue]
+  def nodeLat: Lattice[AbstractEnv]
   def programLat: Lattice[ProgramState]
-  def dir: DataFlowAnalysis.Direction
-  def mayMust: DataFlowAnalysis.MayMust
-  def transfer(node: CfgNode, state: NodeState): NodeState
+  def forward: Boolean
+  def must: Boolean
+  def transfer(node: CfgNode, state: AbstractEnv): AbstractEnv
 }
 
 object DataFlowAnalysis {
-  sealed trait Direction
-  object Direction {
-    case object Forward extends Direction
-    case object Backward extends Direction
-  }
-  sealed trait MayMust
-  object MayMust {
-    case object May extends MayMust
-    case object Must extends MayMust
+  abstract class Builder[E](_forward: Boolean = true,
+                            _must: Boolean = true
+                           )(decls: Declarations,
+                             cfg: Cfg.Cfg
+                           )
+    extends DataFlowAnalysis with FixpointComputation.Naive {
+    override type AbstractValue = E
+    override implicit lazy val nodeLat: Lattice[AbstractEnv] = Lattice.mapLat(decls.values, vLat)
+    override implicit lazy val programLat: Lattice[ProgramState] = Lattice.mapLat(cfg.nodes, nodeLat)
+    override def forward: Boolean = _forward
+    override def must: Boolean = _must
+
+    def fixpoint(): ProgramState = fixpoint(cfg)
   }
 }
