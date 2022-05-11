@@ -109,7 +109,7 @@ object AstNormalizer {
 
   private object SimpleExpr {
     def unapply(expr: Expr): Boolean = expr match {
-      case _: Identifier | _: Number | _: Null => true
+      case _: Identifier | _: Input | _: Number | _: Null => true
       case _ => false
     }
   }

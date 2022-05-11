@@ -19,13 +19,15 @@ trait DataFlowAnalysis {
 }
 
 object DataFlowAnalysis {
-  abstract class Builder[E](_forward: Boolean = true,
+  abstract class Builder[E](lat: Lattice[E],
+                            _forward: Boolean = true,
                             _must: Boolean = true
                            )(decls: Declarations,
                              cfg: Cfg.Cfg
                            )
-    extends DataFlowAnalysis with FixpointComputation.Naive {
-    assert(forward && must, "support for backward & may analyses is not yet implemented")
+    extends DataFlowAnalysis with FixpointComputation {
+
+    implicit val vLat: Lattice[AbstractValue] = if (must) lat else Lattice.invLat(lat)
 
     override type AbstractValue = E
     override implicit lazy val nodeLat: Lattice[AbstractEnv] = Lattice.mapLat(decls.values, vLat)
@@ -33,9 +35,9 @@ object DataFlowAnalysis {
     override def forward: Boolean = _forward
     override def must: Boolean = _must
 
-    def fixpoint(): ProgramState = fixpoint(cfg, if (forward) {
+    def fixpoint(): ProgramState = fixpoint(if (forward) cfg else cfg.inverted, {
       val initState = nodeLat.bot ++ (for (param <- cfg.params) yield param -> vLat.top)
       programLat.bot.updated(Left(Cfg.Source), initState)
-    } else ???)
+    })
   }
 }

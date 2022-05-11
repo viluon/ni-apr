@@ -41,10 +41,12 @@ object Cfg {
       inv
     }
 
-    def compose(other: Cfg): Cfg = {
+    def compose(other: Cfg): Cfg = compose(List(other))
+
+    def compose(others: List[Cfg]): Cfg = {
       val keptHere = graph.toSeq.map(p => (p._1, p._2.filterNot(_ == Left(Sink))))
-      val keptThere = other.graph.toSeq.filterNot(_._1 == Left(Source))
-      val bridged = for ((k, vs) <- graph.toSeq; if vs contains Left(Sink))
+      val keptThere = others.flatMap(_.graph.toSeq.filterNot(_._1 == Left(Source)))
+      val bridged = for (other <- others; (k, vs) <- graph.toSeq; if vs contains Left(Sink))
         yield (k, other.graph(Left(Source)))
 
       Cfg((keptHere ++ keptThere ++ bridged).foldLeft(Map[CfgNode, Set[CfgNode]]()) {
@@ -52,7 +54,7 @@ object Cfg {
           case Some(set) => Some(vs ++ set)
           case None => Some(vs)
         }
-      }, params ++ other.params) // TODO correct?
+      }, params ++ others.flatMap(_.params)) // TODO correct?
     }
 
     def redirect(to: CfgNode): Cfg = copy(graph =
@@ -124,7 +126,9 @@ object Cfg {
         .compose(convert(block).redirect(Right(guard)))
         .add(Right(last(block)), Right(guard))
         .add(Right(guard), Left(Sink))
-    case IfStmt(guard, thenBranch, elseBranch, span) => ???
+    case IfStmt(guard, thenBranch, elseBranch, _) =>
+      Cfg.singleton(guard)
+        .compose((thenBranch :: elseBranch.toList map convert) :+ Cfg.empty take 2)
     case _: ReturnStmt | _: VarStmt | _: AssignStmt | _: OutputStmt => Cfg.singleton(stmt)
   }
 }

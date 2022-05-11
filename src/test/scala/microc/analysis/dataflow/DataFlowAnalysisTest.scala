@@ -5,16 +5,8 @@ import microc.analysis.SemanticAnalysis
 import microc.ast.AstNormalizer
 import microc.cfg.Cfg
 import munit.FunSuite
-import org.scalacheck.Prop.forAll
-import org.scalacheck.Properties
 
 class DataFlowAnalysisTest extends FunSuite with Parsing {
-  object TransferMonotonicity extends Properties("transfer function") {
-    property("monotonic") = forAll { (cfg: Cfg.Cfg) =>
-      ???
-    }(implicitly, ???, implicitly, ???)
-  }
-
   test("Constant analysis should produce meaningful results") {
     val ast = AstNormalizer.normalize(parseUnsafe(
       """ite(n) {

@@ -8,9 +8,8 @@ import microc.cfg.Cfg
 import microc.cfg.Cfg.CfgNode
 
 class ConstantAnalysis(decls: Declarations, cfg: Cfg.Cfg)
-  extends DataFlowAnalysis.Builder[Lattice.FlatLat[Int]]()(decls, cfg) {
-
-  implicit val vLat: Lattice[AbstractValue] = Lattice.flatLat[Int]
+  extends DataFlowAnalysis.Builder(Lattice.flatLat[Int])(decls, cfg)
+    with FixpointComputation.Naive {
 
   def eval(env: AbstractEnv, expr: Expr): AbstractValue = expr match {
     case ast.Number(k, _) => Lattice.FlatLat.Mid(k)
@@ -25,14 +24,13 @@ class ConstantAnalysis(decls: Declarations, cfg: Cfg.Cfg)
         case (Lattice.FlatLat.Mid(x), Lattice.FlatLat.Mid(y)) => Lattice.FlatLat.Mid(op.eval(x, y))
         case (a, b) => a ⊔ b
       }
-    case _ => ⊤
+    case _ => ⊤[AbstractValue]
   }
 
   def transfer(node: CfgNode, env: AbstractEnv): AbstractEnv = node match {
     case Right(VarStmt(ids, _)) => ids.foldLeft(env)((acc, id) => acc.updated(id, vLat.bot))
     case Right(AssignStmt(DirectWrite(id, _), rhs, _)) =>
-      val r = env.updated(decls(id), eval(env, rhs))
-      r ⊔ env
+      env.updated(decls(id), env(decls(id)) ⊔ eval(env, rhs))
     case _ => env
   }
 }

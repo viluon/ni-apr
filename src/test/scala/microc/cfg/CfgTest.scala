@@ -42,4 +42,26 @@ class CfgTest extends FunSuite with Parsing {
     val cfg = zero.compose(one)
     println(cfg)
   }
+
+  test("CFG conversion should support ifs") {
+    val ast = parseUnsafe(
+      """main(n) {
+        |  var x;
+        |  x = 10;
+        |  if (n > x) {
+        |    n = n - 1;
+        |    if (x == 5) {
+        |      x = x + 1;
+        |      output x;
+        |    } else {
+        |      x = x * x;
+        |      n = 0;
+        |    }
+        |    n = n + 1;
+        |  }
+        |  return n;
+        |}
+        |""".stripMargin)
+    println(Cfg.convert(AstNormalizer.normalize(ast)).toDot)
+  }
 }

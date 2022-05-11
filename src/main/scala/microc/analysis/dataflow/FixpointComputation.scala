@@ -21,7 +21,7 @@ object FixpointComputation {
       )
 
       def step(prevState: ProgramState): ProgramState = program.nodes.foldLeft(prevState)(
-        (state, node) => state ⊔ state.updated(node, transfer(node, join(node, prevState)))
+        (state, node) => state.updated(node, state(node) ⊔ transfer(node, join(node, prevState)))
       )
 
       var curr = initialState
