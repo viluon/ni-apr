@@ -1,10 +1,9 @@
 package microc.analysis.dataflow
 
-import microc.ast.Identifier
 import microc.cfg.Cfg
 
 trait FixpointComputation { self: DataFlowAnalysis =>
-  def fixpoint(program: Cfg.Cfg): ProgramState
+  def fixpoint(program: Cfg.Cfg, initialState: ProgramState): ProgramState
 }
 
 object FixpointComputation {
@@ -13,7 +12,7 @@ object FixpointComputation {
     private implicit def nl: Lattice[AbstractEnv] = nodeLat
     import Lattice.LatOps
 
-    def fixpoint(program: Cfg.Cfg): ProgramState = {
+    def fixpoint(program: Cfg.Cfg, initialState: ProgramState = programLat.bot): ProgramState = {
       implicit def cfg: Cfg.Cfg = program
       import Cfg.CfgOps
 
@@ -22,10 +21,10 @@ object FixpointComputation {
       )
 
       def step(prevState: ProgramState): ProgramState = program.nodes.foldLeft(prevState)(
-        (state, node) => state.updated(node, transfer(node, join(node, prevState)))
+        (state, node) => state ⊔ state.updated(node, transfer(node, join(node, prevState)))
       )
 
-      var curr = programLat.bot
+      var curr = initialState
       var last = curr
 
       do {

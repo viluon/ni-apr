@@ -1,6 +1,6 @@
 package microc.cfg
 
-import microc.ast.{AssignStmt, AstNode, Block, FunDecl, IfStmt, NestedBlockStmt, OutputStmt, Program, ReturnStmt, Stmt, StmtInNestedBlock, VarStmt, WhileStmt}
+import microc.ast.{AssignStmt, AstNode, Block, Decl, FunDecl, IfStmt, NestedBlockStmt, OutputStmt, Program, ReturnStmt, Stmt, StmtInNestedBlock, VarStmt, WhileStmt}
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -22,7 +22,7 @@ object Cfg {
   case object Sink extends CfgSpecialNode
   type CfgNode = Either[CfgSpecialNode, AstNode]
 
-  case class Cfg(graph: Map[CfgNode, Set[CfgNode]]) {
+  case class Cfg(graph: Map[CfgNode, Set[CfgNode]], params: List[Decl]) {
     if (graph.contains(Left(Sink))) throw new IllegalStateException("the sink isn't a sink!")
     if (graph.values.exists(_.contains(Left(Source)))) throw new IllegalStateException("the source isn't a source!")
 
@@ -31,8 +31,10 @@ object Cfg {
     // TODO scalacheck that cfg.inverted.inverted == cfg
     lazy val inverted: Cfg = {
       val inv = invertedCache.getOrElse(
-        Cfg((for ((k, vs) <- graph.toSeq; v <- vs) yield (swapSourceSink(v), swapSourceSink(k)))
-          .groupMapReduce(_._1)(p => Set(p._2))(_ ++ _))
+        copy(graph =
+          (for ((k, vs) <- graph.toSeq; v <- vs) yield (swapSourceSink(v), swapSourceSink(k)))
+          .groupMapReduce(_._1)(p => Set(p._2))(_ ++ _)
+        )
       )
       invertedCache = Some(inv)
       inv.invertedCache = Some(this)
@@ -50,16 +52,17 @@ object Cfg {
           case Some(set) => Some(vs ++ set)
           case None => Some(vs)
         }
-      })
+      }, params ++ other.params) // TODO correct?
     }
 
-    def redirect(to: CfgNode): Cfg =
-      Cfg(graph.toSeq.map(p => (p._1, p._2.map {
+    def redirect(to: CfgNode): Cfg = copy(graph =
+      graph.toSeq.map(p => (p._1, p._2.map {
         case Left(Sink) => to
         case x => x
-      })).toMap)
+      })).toMap
+    )
 
-    def add(from: CfgNode, to: CfgNode): Cfg = Cfg(
+    def add(from: CfgNode, to: CfgNode): Cfg = copy(graph =
       graph.updatedWith(from) {
         case Some(set) => Some(set.incl(to))
         case None => Some(Set(to))
@@ -88,13 +91,16 @@ object Cfg {
       sb.toString()
     }
   }
+
   object Cfg {
-    val empty: Cfg = Cfg(Map(Left(Source) -> Set(Left(Sink))))
-    def singleton(node: AstNode): Cfg = Cfg(Map(Left(Source) -> Set(Right(node)), Right(node) -> Set(Left(Sink))))
+    val empty: Cfg = Cfg(Map(Left(Source) -> Set(Left(Sink))), Nil)
+    def singleton(node: AstNode): Cfg = Cfg(Map(Left(Source) -> Set(Right(node)), Right(node) -> Set(Left(Sink))), Nil)
   }
 
   def convert(program: Program): Cfg = program.funs.foldLeft(Cfg.empty) {
-    case (acc, FunDecl(_, _, block, _)) => acc.compose(convert(block))
+    case (acc, FunDecl(_, params, block, _)) =>
+      val cfg = acc.compose(convert(block))
+      cfg.copy(params = params ++ cfg.params)
   }
 
   def convert(stmts: List[Stmt]): Cfg = stmts.foldLeft(Cfg.empty)((acc, stmt) => acc.compose(convert(stmt)))

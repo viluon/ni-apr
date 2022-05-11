@@ -32,8 +32,6 @@ class ConstantAnalysis(decls: Declarations, cfg: Cfg.Cfg)
     case Right(VarStmt(ids, _)) => ids.foldLeft(env)((acc, id) => acc.updated(id, vLat.bot))
     case Right(AssignStmt(DirectWrite(id, _), rhs, _)) =>
       val r = env.updated(decls(id), eval(env, rhs))
-      if (!(env ⊑ r))
-        println("oh no")
       r ⊔ env
     case _ => env
   }
