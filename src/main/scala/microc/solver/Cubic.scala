@@ -15,17 +15,18 @@ object Cubic {
     * Represents a t ∈ x ⇒ y ⊆ z constraint (where t ∈ x comes from cond).
     */
   case class CondSubSet[T, V](cond: In[T, V], y: V, z: V) extends Constraint[T, V]
-}
-
-case class Cubic[T, V](tokens: Set[T], variables: Set[V], constraints: List[Cubic.Constraint[T, V]]) {
-  type Graph = mutable.Map[V, ConstrVar]
 
   /**
     * Constraint variable.
     */
-  case class ConstrVar(v: V, sol: mutable.Set[T], succ: mutable.Set[V], cond: mutable.Map[T, ListBuffer[(V, V)]])
+  case class ConstrVar[T, V](v: V, sol: mutable.Set[T], succ: mutable.Set[V], cond: mutable.Map[T, ListBuffer[(V, V)]])
+}
 
-  private def empty(v: V): ConstrVar = ConstrVar(v, mutable.Set(), mutable.Set(), mutable.Map((for (t <- tokens) yield t -> ListBuffer[(V, V)]()).toSeq: _*))
+case class Cubic[T, V](tokens: Set[T], variables: Set[V], constraints: List[Cubic.Constraint[T, V]]) {
+  type ConstrVar = Cubic.ConstrVar[T, V]
+  type Graph = mutable.Map[V, ConstrVar]
+
+  private def empty(v: V): ConstrVar = Cubic.ConstrVar(v, mutable.Set(), mutable.Set(), mutable.Map((for (t <- tokens) yield t -> ListBuffer[(V, V)]()).toSeq: _*))
   private def initial: Graph = mutable.Map((for (v <- variables) yield v -> empty(v)).toSeq: _*)
 
   def solve(): Graph = {
@@ -47,6 +48,7 @@ case class Cubic[T, V](tokens: Set[T], variables: Set[V], constraints: List[Cubi
     }
 
     def propagate(): Unit = {
+      // TODO collapse cycles
       while (worklist.nonEmpty) {
         val (t, x) = worklist.remove(0)
         for ((y, z) <- x.cond(t)) addEdge(graph(y), graph(z))
