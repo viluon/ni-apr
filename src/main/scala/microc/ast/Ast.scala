@@ -1,5 +1,7 @@
 package microc.ast
 
+import java.lang.reflect.Constructor
+
 /**
   * A source code location of an AST node.
   *
@@ -56,6 +58,11 @@ sealed trait BinaryOperator {
 }
 
 object BinaryOperator {
+  lazy val all: Set[BinaryOperator] = reflect.runtime.universe
+    .typeOf[BinaryOperator].typeSymbol.asClass.knownDirectSubclasses
+    .map(_.asClass.getClass.getConstructors.head)
+    .map(_.asInstanceOf[Constructor[BinaryOperator]].newInstance())
+
   def apply(s: String): BinaryOperator = s match {
     case "+"  => Plus
     case "-"  => Minus

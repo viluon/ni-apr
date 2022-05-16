@@ -1,8 +1,10 @@
 package microc.cli
 
 import microc.ProgramException
+import microc.analysis.dataflow.{ConstantAnalysis, DataFlowAnalysis, FixpointComputation}
 import microc.analysis.{SemanticAnalysis, TypeAnalysis}
-import microc.ast.JSONAstPrinter
+import microc.ast.{AstNormalizer, Decl, Identifier, JSONAstPrinter}
+import microc.cfg.Cfg
 import microc.interpreter.BasicInterpreter
 import microc.parser.Parser
 import microc.util.CharacterSets.NL
@@ -29,13 +31,21 @@ case object PrintHelpAction extends Action {
          |    --indent NUM         indent the result by NUM (default: no indent)
          |    --parser NAME        specify parser which parser to use
          |    --output FILE        specify the output file
-         |  
+         |
          |  run [options] FILE     runs the microC program in FILE
-         |    
+         |
          |    options:
          |    --ascii              convert input/output to/from ASCII codes
          |    --output             consider the return from main as output
          |    --parser NAME        specify parser which parser to use
+         |
+         |  type FILE              typechecks FILE
+         |
+         |  cfg FILE               exports the control flow graph of FILE to DOT
+         |
+         |  sign FILE              performs sign analysis on FILE
+         |
+         |  const FILE             performs constant analysis on FILE
          |""".stripMargin)
     0
   }
@@ -168,4 +178,66 @@ case class TypeAction(file: File,
         1
     }
   }
+}
+
+case class CfgAction(file: File, parserName: String = Parser.DefaultParserName)
+  extends Action with ParsingAction {
+  override def run(): Int = {
+    val source = readInput(file)
+    val reporter = new Reporter(source, Some(file.getPath))
+
+    try {
+      val program = parser.parseProgram(source)
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(program)
+      // TODO type analysis too
+      val normalized = AstNormalizer.normalize(program)
+      val cfg = Cfg.convert(normalized)
+      println(cfg.toDot)
+      0
+    } catch {
+      case e: ProgramException =>
+        System.err.println(e.format(reporter))
+        1
+    }
+  }
+}
+
+abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
+  extends Action with ParsingAction {
+
+  protected def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation
+  def file: File
+
+  override def run(): Int = {
+    val source = readInput(file)
+    val reporter = new Reporter(source, Some(file.getPath))
+
+    try {
+      val program = parser.parseProgram(source)
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(program)
+      // TODO type analysis too
+      val normalized = AstNormalizer.normalize(program)
+      val cfg = Cfg.convert(normalized)
+      val ana = analysis(declarations, cfg)
+      val result = ana.fixpoint(cfg, ana.programLat.bot)
+      println(cfg.toDot(result.view.mapValues(
+        "\\n" + _.map(p => p._1.name + ": " + p._2).mkString("{", ",", "}")
+      ).toMap))
+      0
+    } catch {
+      case e: ProgramException =>
+        System.err.println(e.format(reporter))
+        1
+    }
+  }
+}
+
+case class SignAction(file: File) extends AnalyseAction() {
+  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation =
+    ???
+}
+
+case class ConstAction(file: File) extends AnalyseAction() {
+  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation =
+    new ConstantAnalysis(decls, cfg)
 }

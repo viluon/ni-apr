@@ -58,9 +58,18 @@ class CliParser extends SeqParsers[String] {
   lazy val Type: Parser[TypeAction] =
     "type" ~> FILE ^^ (TypeAction(_))
 
+  lazy val Cfg: Parser[CfgAction] =
+    "cfg" ~> FILE ^^ (CfgAction(_))
+
+  lazy val Sign: Parser[SignAction] =
+    "sign" ~> FILE ^^ SignAction
+
+  lazy val Const: Parser[ConstAction] =
+    "const" ~> FILE ^^ ConstAction
+
   lazy val Help = "--help" ^^^ PrintHelpAction
 
-  lazy val Actions: Parser[Action] = Help | Run | Export | Type | failure("invalid action")
+  lazy val Actions: Parser[Action] = Help | Run | Export | Type | Cfg | Sign | Const | failure("invalid action")
 
   // ----------------------------------------------------------------------------
   // HELPERS
