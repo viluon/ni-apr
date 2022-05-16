@@ -102,7 +102,7 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
       _left_ <- go(left);
       _right_ <- go(right);
       () <- unify(_left_, _right_, s);
-      () <- if (op == Equal) unify(_right_, _expr_, s) else pure(()): Analysis[Unit];
+      () <- if (op == Equal()) unify(_right_, _expr_, s) else pure(()): Analysis[Unit];
       () <- unify(_expr_, Type.Int, s)
     ) yield ()
     case CallFuncExpr(targetFun, args, s) => for (

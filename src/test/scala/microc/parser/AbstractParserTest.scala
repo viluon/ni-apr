@@ -156,14 +156,14 @@ abstract class AbstractParserTest extends FunSuite {
     val actual = parser.parseExpr("1 + 2 * 3 * 4 + 5")
     val expected =
       BinaryOp(
-        Plus,
+        Plus(),
         BinaryOp(
-          Plus,
+          Plus(),
           Number(1, Span(Loc(1, 1), Loc(1, 1))),
           BinaryOp(
-            Times,
+            Times(),
             BinaryOp(
-              Times,
+              Times(),
               Number(2, Span(Loc(1, 5), Loc(1, 5))),
               Number(3, Span(Loc(1, 9), Loc(1, 9))),
               Span(Loc(1, 5), Loc(1, 9), Some(Span(Loc(1, 7), Loc(1, 7))))

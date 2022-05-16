@@ -67,9 +67,12 @@ class CliParser extends SeqParsers[String] {
   lazy val Const: Parser[ConstAction] =
     "const" ~> FILE ^^ ConstAction
 
+  lazy val ShowSignTables: Parser[ShowSignTablesAction] =
+    "show-sign-tables" ^^^ ShowSignTablesAction()
+
   lazy val Help = "--help" ^^^ PrintHelpAction
 
-  lazy val Actions: Parser[Action] = Help | Run | Export | Type | Cfg | Sign | Const | failure("invalid action")
+  lazy val Actions: Parser[Action] = Help | Run | Export | Type | Cfg | Sign | ShowSignTables | Const | failure("invalid action")
 
   // ----------------------------------------------------------------------------
   // HELPERS

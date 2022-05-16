@@ -1,7 +1,7 @@
 package microc.cli
 
 import microc.ProgramException
-import microc.analysis.dataflow.{ConstantAnalysis, DataFlowAnalysis, FixpointComputation}
+import microc.analysis.dataflow.{ConstantAnalysis, DataFlowAnalysis, FixpointComputation, SignAnalysis}
 import microc.analysis.{SemanticAnalysis, TypeAnalysis}
 import microc.ast.{AstNormalizer, Decl, Identifier, JSONAstPrinter}
 import microc.cfg.Cfg
@@ -44,6 +44,9 @@ case object PrintHelpAction extends Action {
          |  cfg FILE               exports the control flow graph of FILE to DOT
          |
          |  sign FILE              performs sign analysis on FILE
+         |
+         |  show-sign-tables       visualise the transfer function lookup tables
+         |                         used for sign analysis
          |
          |  const FILE             performs constant analysis on FILE
          |""".stripMargin)
@@ -221,7 +224,7 @@ abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
       val ana = analysis(declarations, cfg)
       val result = ana.fixpoint(cfg, ana.programLat.bot)
       println(cfg.toDot(result.view.mapValues(
-        "\\n" + _.map(p => p._1.name + ": " + p._2).mkString("{", ",", "}")
+        "\\n" + _.map(p => p._1.name + ": " + p._2).toList.sorted.mkString("{", ",", "}")
       ).toMap))
       0
     } catch {
@@ -234,10 +237,17 @@ abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
 
 case class SignAction(file: File) extends AnalyseAction() {
   override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation =
-    ???
+    new SignAnalysis(decls, cfg)
 }
 
 case class ConstAction(file: File) extends AnalyseAction() {
   override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation =
     new ConstantAnalysis(decls, cfg)
+}
+
+case class ShowSignTablesAction() extends Action {
+  override def run(): Int = {
+    println(SignAnalysis.renderTables(SignAnalysis.opTable))
+    0
+  }
 }

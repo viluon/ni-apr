@@ -1,6 +1,6 @@
 package microc.ast
 
-import java.lang.reflect.Constructor
+import microc.util.ReflectionHelpers
 
 /**
   * A source code location of an AST node.
@@ -47,53 +47,53 @@ object Span {
 
 /** A binary operator */
 sealed trait BinaryOperator {
-  def eval(l: Int, r: Int): Int = this match {
-    case Plus => l + r
-    case Minus => l - r
-    case Times => l * r
-    case Divide => l / r
-    case Equal => if (l == r) 1 else 0
-    case GreaterThan => if (l > r) 1 else 0
+  def eval(l: Int, r: Int): Option[Int] = this match {
+    case Plus() => Some(l + r)
+    case Minus() => Some(l - r)
+    case Times() => Some(l * r)
+    case Divide() => if (r == 0) None else Some(l / r)
+    case Equal() => Some(if (l == r) 1 else 0)
+    case GreaterThan() => Some(if (l > r) 1 else 0)
   }
 }
 
 object BinaryOperator {
   lazy val all: Set[BinaryOperator] = reflect.runtime.universe
     .typeOf[BinaryOperator].typeSymbol.asClass.knownDirectSubclasses
-    .map(_.asClass.getClass.getConstructors.head)
-    .map(_.asInstanceOf[Constructor[BinaryOperator]].newInstance())
+    .map(op => new ReflectionHelpers.CaseClassFactory(op.asType.toType))
+    .map(_.buildWith(Seq()).asInstanceOf[BinaryOperator])
 
   def apply(s: String): BinaryOperator = s match {
-    case "+"  => Plus
-    case "-"  => Minus
-    case "*"  => Times
-    case "/"  => Divide
-    case "==" => Equal
-    case ">"  => GreaterThan
+    case "+"  => Plus()
+    case "-"  => Minus()
+    case "*"  => Times()
+    case "/"  => Divide()
+    case "==" => Equal()
+    case ">"  => GreaterThan()
   }
 }
 
-case object Plus extends BinaryOperator {
+case class Plus() extends BinaryOperator {
   override def toString: String = "+"
 }
 
-case object Minus extends BinaryOperator {
+case class Minus() extends BinaryOperator {
   override def toString: String = "-"
 }
 
-case object Times extends BinaryOperator {
+case class Times() extends BinaryOperator {
   override def toString: String = "*"
 }
 
-case object Divide extends BinaryOperator {
+case class Divide() extends BinaryOperator {
   override def toString: String = "/"
 }
 
-case object Equal extends BinaryOperator {
+case class Equal() extends BinaryOperator {
   override def toString: String = "=="
 }
 
-case object GreaterThan extends BinaryOperator {
+case class GreaterThan() extends BinaryOperator {
   override def toString: String = ">"
 }
 

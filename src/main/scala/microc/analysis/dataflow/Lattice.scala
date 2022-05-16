@@ -18,13 +18,19 @@ object Lattice {
   def ⊤[E](implicit l: Lattice[E]): E = l.top
   def ⊥[E](implicit l: Lattice[E]): E = l.bot
 
-  sealed trait FlatLat[A]
+  sealed trait FlatLat[A] {
+    def map[B](f: A => B): FlatLat[B] = this match {
+      case FlatLat.Top() => FlatLat.Top()
+      case FlatLat.Bot() => FlatLat.Bot()
+      case FlatLat.Mid(x) => FlatLat.Mid(f(x))
+    }
+  }
   object FlatLat {
     case class Top[A]() extends FlatLat[A] {
-      override def toString: String = "T"
+      override def toString: String = "⊤"
     }
     case class Bot[A]() extends FlatLat[A] {
-      override def toString: String = "_|_"
+      override def toString: String = "⊥"
     }
     case class Mid[A](x: A) extends FlatLat[A]
   }

@@ -21,7 +21,10 @@ class ConstantAnalysis(decls: Declarations, cfg: Cfg.Cfg)
         case _ => throw new IllegalStateException()
       }
       (resolve(left), resolve(right)) match {
-        case (Lattice.FlatLat.Mid(x), Lattice.FlatLat.Mid(y)) => Lattice.FlatLat.Mid(op.eval(x, y))
+        case (Lattice.FlatLat.Mid(x), Lattice.FlatLat.Mid(y)) => op.eval(x, y) match {
+          case Some(r) => Lattice.FlatLat.Mid(r)
+          case None => ⊤[AbstractValue] // TODO shouldn't this be bottom?
+        }
         case (a, b) => a ⊔ b
       }
     case _ => ⊤[AbstractValue]

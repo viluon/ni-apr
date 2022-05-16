@@ -240,10 +240,13 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     val span = left.span ++ right.span
     for (lv <- eval(left); rv <- eval(right))
       yield (lv, rv) match {
-        case (IntVal(l), IntVal(r)) => pure(IntVal(operator.eval(l, r)))
+        case (IntVal(l), IntVal(r)) => operator.eval(l, r) match {
+          case Some(x) => pure(IntVal(x))
+          case None => crash(s"division by zero", span)
+        }
         case (x@(NullVal | AddrVal(_) | FunAddrVal(_)), y@(NullVal | AddrVal(_) | FunAddrVal(_)))
-          if operator == Equal => pure(IntVal(if (x == y) 1 else 0))
-        case (x, y) if operator == Equal =>
+          if operator == Equal() => pure(IntVal(if (x == y) 1 else 0))
+        case (x, y) if operator == Equal() =>
           crash(s"operator $operator expected two integers or two pointers, got $x and $y", span)
         case (IntVal(_), problem) =>
           crash(s"operator $operator expected int, got $problem", span.highlighting(right.span))
