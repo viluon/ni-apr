@@ -25,9 +25,10 @@ class DataFlowAnalysisTest extends FunSuite with Parsing {
     val constants = new ConstantAnalysis(decls, cfg).fixpoint()
 
     println(cfg.toDot(
-      constants.view.mapValues(
+      constants.values.flatMap(fn => fn.view.mapValues(
         "\\n" + _.map(p => p._1.name + ": " + p._2).mkString("{", ",", "}")
-      ).toMap
+      )).toMap,
+      decls
     ))
   }
 

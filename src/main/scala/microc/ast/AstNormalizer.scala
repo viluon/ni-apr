@@ -10,6 +10,12 @@ object AstNormalizer {
     Traverse[List].traverse(program.funs)(normalizeFun).runA(FreshStore(0)).value, program.span
   )
 
+  def compare(orig: Program, normalized: Program): String = {
+    val after = ("normalized\n" + normalized.toString).linesIterator.toList
+    val before = LazyList.from(("original\n" + orig.toString).linesIterator).padTo(after.length, "").map("%-30s".formatted(_))
+    (before zip after).map(_.productIterator.mkString).mkString("\n")
+  }
+
   private case class FreshStore(k: Int)
   private type VariableStore[A] = State[FreshStore, A]
   private type Normalizing[A] = WriterT[VariableStore, List[(
@@ -62,6 +68,10 @@ object AstNormalizer {
   private def bake[A](x: Normalizing[A]): Normalizing[(A, List[StmtInNestedBlock])] =
     WriterT.listen(x).mapWritten(_.map(p => (false, p._2))).map(p => (p._1, p._2.filter(_._1).map(_._2)))
 
+  /**
+    * Nest statements in blocks, if necessary.
+    * Should be applied pairwise to combine adjacent blocks and inline statements directly following a block into it.
+    */
   private def nest(stmts: List[StmtInNestedBlock], span: Span): StmtInNestedBlock = stmts match {
     case List(stmt) => stmt
     case List(n: NestedBlockStmt, m: NestedBlockStmt) => NestedBlockStmt(n.body ++ m.body, span)
@@ -75,9 +85,7 @@ object AstNormalizer {
       for {
         _s <- bake(normalizeStmt(stmt))
         (s, log) = _s
-      } yield
-        if (log.isEmpty) s
-        else nest(log :+ s, span)
+      } yield nest(log :+ s, span)
     ).map(nest(_, span))
     case IfStmt(guard, thenBranch, elseBranch, span) => for {
       _g <- bake(bind(guard))
@@ -94,12 +102,15 @@ object AstNormalizer {
           span
         ), span)
     case WhileStmt(guard, block, span) => for {
-      _g <- bake(bind(guard, true))
+      _g <- bake(bind(guard, force = true))
       (g, gLog) = _g
       _b <- bake(normalizeStmt(block))
       (b, bLog) = _b
     } yield nest(gLog :+ WhileStmt(g, nest((bLog :+ b) ++ gLog.map(cloneStmt(span)), block.span), span), span)
-    case OutputStmt(expr, span) => bind(expr).map(OutputStmt(_, span))
+    case OutputStmt(expr, span) => for {
+      _e <- bake(bind(expr))
+      (e, eLog) = _e
+    } yield nest(eLog :+ OutputStmt(e, span), span)
   }
 
   private def cloneStmt(span: Span)(stmt: StmtInNestedBlock): StmtInNestedBlock =
@@ -143,7 +154,7 @@ object AstNormalizer {
     case FieldAccess(record, field, span) => bind(record).map(FieldAccess(_, field, span))
     case CallFuncExpr(targetFun, args, span) => for {
       tf <- bind(targetFun)
-      args <- Traverse[List].traverse(args)(e => bind(e))
+      args <- Traverse[List].traverse(args)(e => bind(e, force = true))
     } yield CallFuncExpr(tf, args, span)
     case BinaryOp(operator, left, right, span) => for {
       l <- bind(left)

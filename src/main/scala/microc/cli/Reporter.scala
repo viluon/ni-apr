@@ -19,7 +19,7 @@ class Reporter(source: String, fileName: Option[String] = None) {
     val underline = '¯'
 
     val lines = (firstLine to lastLine).flatMap(line => {
-      val lineNumber = s"% ${math.log10(lastLine).ceil.toInt}d".format(line)
+      val lineNumber = s"% ${math.max(1, math.log10(lastLine).ceil.toInt)}d".format(line)
       (lineNumber + bar + lineContent(line)) :: (errs.find(_.span.containsLine(line)) match {
         case Some(err) =>
           val Span(from, to, maybeHl) = err.span

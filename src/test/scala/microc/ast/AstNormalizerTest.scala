@@ -1,9 +1,70 @@
 package microc.ast
 
-import microc.Parsing
+import microc.interpreter.Interpreter
+import microc.{Examples, Parsing}
 import munit.FunSuite
 
+import java.io.{StringReader, StringWriter}
+
 class AstNormalizerTest extends FunSuite with Parsing {
+  /**
+    * Verify that the result of the execution of a normalized program is equal to
+    * the result of the execution of its original.
+    *
+    * @param code The program to parse, normalize, and run.
+    * @param args The arguments to the main function.
+    */
+  def verify(code: String, args: List[Int] = Nil): String => Unit = {
+    val orig = parseUnsafe(code)
+    val normalized = AstNormalizer.normalize(orig)
+    println(AstNormalizer.compare(orig, normalized))
+
+    { input =>
+      val origStdout = new StringWriter()
+      val origExitCode = Interpreter(orig, new StringReader(input), origStdout).run(args)
+      val normalizedStdout = new StringWriter()
+      val normalizedExitCode = Interpreter(normalized, new StringReader(input), normalizedStdout).run(args)
+
+      assertEquals(normalizedExitCode, origExitCode)
+      assertEquals(normalizedStdout.toString, origStdout.toString)
+    }
+  }
+
+  val examples: List[(List[Int], Iterable[String], String)] = List(
+    (Nil, (0 to 5).map(_.toString),
+      """fac(n) {
+        |    var f;
+        |
+        |    if (n == 0) {
+        |      f = 1;
+        |    } else {
+        |      f = n * fac(n - 1);
+        |    }
+        |
+        |    return f;
+        |}
+        |
+        |main() {
+        |    var n;
+        |
+        |    n = input;
+        |    output fac(n);
+        |
+        |    return 0;
+        |}
+        |""".stripMargin),
+    (Nil, Nil, Examples.ExampleMapInc)
+  )
+
+  test("Normalized programs should be operationally equal to their originals") {
+    for {
+      (args, inputs, code) <- examples
+      test = verify(code, args)
+      _ = println("-" * 80)
+      input <- inputs
+    } test(input)
+  }
+
   test("Arithmetic expressions should be flattened") {
     val program = parseUnsafe(
       """foo(f, y) {

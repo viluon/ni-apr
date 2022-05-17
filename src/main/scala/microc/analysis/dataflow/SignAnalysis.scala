@@ -8,7 +8,7 @@ import microc.ast.{Alloc, AssignStmt, BinaryOp, BinaryOperator, CallFuncExpr, De
 import microc.cfg.Cfg
 import microc.cfg.Cfg.CfgNode
 
-class SignAnalysis(decls: Declarations, cfg: Cfg.Cfg)
+class SignAnalysis(decls: Declarations, cfg: Cfg.Interprocedural)
   extends DataFlowAnalysis.Builder(SignAnalysis.signLat)(decls, cfg)
   with FixpointComputation.Naive {
   def eval(env: AbstractEnv, expr: Expr): AbstractValue = expr match {
@@ -77,7 +77,7 @@ object SignAnalysis {
             case Some(x) => mid(signOf(x))
             case None => signLat.bot
           }
-        case (FlatLat.Top(), _) | (_, FlatLat.Top()) => signLat.top
+        case (FlatLat.Top(), _) | (_, FlatLat.Top()) => intLat.lub(l, r).map(signOf) // this won't work! the lub is always ⊤
       })
       samples.groupMapReduce(_._1 // group by the input signs
       )(_._2 // use the eval outputs as RHS's

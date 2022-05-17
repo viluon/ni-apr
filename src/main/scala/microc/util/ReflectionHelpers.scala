@@ -1,5 +1,6 @@
 package microc.util
 
+import scala.reflect.runtime.universe
 import scala.reflect.runtime.universe._
 
 /*
@@ -11,34 +12,34 @@ val result: Person = personFactory.buildWith(Seq("Connor", 27))
   assert(result == expected)
 */
 
-
+// adapted from https://gist.github.com/ConnorDoyle/7002426, thank you Connor!
 object ReflectionHelpers {
-  protected val classLoaderMirror = runtimeMirror(getClass.getClassLoader)
+  protected val classLoaderMirror: universe.Mirror = runtimeMirror(getClass.getClassLoader)
 
   /**
     * Encapsulates functionality to reflectively invoke the constructor
     * for a given case class type.
     */
   class CaseClassFactory(val tpe: Type) {
-    val classSymbol = tpe.typeSymbol.asClass
+    val classSymbol: universe.ClassSymbol = tpe.typeSymbol.asClass
 
     if (!(tpe <:< typeOf[Product] && classSymbol.isCaseClass))
       throw new IllegalArgumentException(
         "CaseClassFactory only applies to case classes!"
       )
 
-    val classMirror = classLoaderMirror reflectClass classSymbol
+    val classMirror: universe.ClassMirror = classLoaderMirror reflectClass classSymbol
 
-    val constructorSymbol = tpe.decl(termNames.CONSTRUCTOR)
+    val constructorSymbol: universe.Symbol = tpe.decl(termNames.CONSTRUCTOR)
 
-    val defaultConstructor =
+    val defaultConstructor: universe.MethodSymbol =
       if (constructorSymbol.isMethod) constructorSymbol.asMethod
       else {
         val ctors = constructorSymbol.asTerm.alternatives
         ctors.map { _.asMethod }.find { _.isPrimaryConstructor }.get
       }
 
-    val constructorMethod = classMirror reflectConstructor defaultConstructor
+    val constructorMethod: universe.MethodMirror = classMirror reflectConstructor defaultConstructor
 
     /**
       * Attempts to create a new instance of the specified type by calling the

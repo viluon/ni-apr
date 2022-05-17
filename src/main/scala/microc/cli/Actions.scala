@@ -191,11 +191,12 @@ case class CfgAction(file: File, parserName: String = Parser.DefaultParserName)
 
     try {
       val program = parser.parseProgram(source)
-      val (declarations, fieldNames) = new SemanticAnalysis().analyze(program)
-      // TODO type analysis too
+      // NB: normalization must happen before semantic analysis, otherwise conversion to CFG produces garbage
       val normalized = AstNormalizer.normalize(program)
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(normalized)
+      // TODO type analysis too
       val cfg = Cfg.convert(normalized)
-      println(cfg.toDot)
+      println(cfg.toDot(declarations))
       0
     } catch {
       case e: ProgramException =>
@@ -208,7 +209,7 @@ case class CfgAction(file: File, parserName: String = Parser.DefaultParserName)
 abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
   extends Action with ParsingAction {
 
-  protected def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation
+  protected def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation
   def file: File
 
   override def run(): Int = {
@@ -217,15 +218,16 @@ abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
 
     try {
       val program = parser.parseProgram(source)
-      val (declarations, fieldNames) = new SemanticAnalysis().analyze(program)
       // TODO type analysis too
       val normalized = AstNormalizer.normalize(program)
+      System.err.println(AstNormalizer.compare(program, normalized))
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(normalized)
       val cfg = Cfg.convert(normalized)
       val ana = analysis(declarations, cfg)
       val result = ana.fixpoint(cfg, ana.programLat.bot)
-      println(cfg.toDot(result.view.mapValues(
-        "\\n" + _.map(p => p._1.name + ": " + p._2).toList.sorted.mkString("{", ",", "}")
-      ).toMap))
+      println(cfg.toDot(result.values.flatMap(fn => fn.view.mapValues(env =>
+        "\\n" + env.map(p => p._1.name + ": " + p._2).toList.sorted.mkString("{", ",", "}")
+      )).toMap, declarations))
       0
     } catch {
       case e: ProgramException =>
@@ -236,12 +238,12 @@ abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
 }
 
 case class SignAction(file: File) extends AnalyseAction() {
-  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation =
+  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
     new SignAnalysis(decls, cfg)
 }
 
 case class ConstAction(file: File) extends AnalyseAction() {
-  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Cfg): DataFlowAnalysis with FixpointComputation =
+  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
     new ConstantAnalysis(decls, cfg)
 }
 

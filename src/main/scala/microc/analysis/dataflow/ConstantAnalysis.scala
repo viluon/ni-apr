@@ -7,7 +7,7 @@ import microc.ast.{AssignStmt, BinaryOp, DirectWrite, Expr, Identifier, VarStmt}
 import microc.cfg.Cfg
 import microc.cfg.Cfg.CfgNode
 
-class ConstantAnalysis(decls: Declarations, cfg: Cfg.Cfg)
+class ConstantAnalysis(decls: Declarations, cfg: Cfg.Interprocedural)
   extends DataFlowAnalysis.Builder(Lattice.flatLat[Int])(decls, cfg)
     with FixpointComputation.Naive {
 
