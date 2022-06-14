@@ -45,7 +45,9 @@ object AstNormalizer {
         })
         tmpVarStmtLoc = originalStmts.headOption.map(_.span).getOrElse(block.span).from
         body = FunBlockStmt(
-          block.vars :+ VarStmt(newVars, Span(tmpVarStmtLoc, tmpVarStmtLoc)),
+          block.vars ++ (if (newVars.nonEmpty)
+            List(VarStmt(newVars, Span(tmpVarStmtLoc, tmpVarStmtLoc)))
+          else Nil),
           result._1.filter(_._1).map(_._2) ++ originalStmts,
           block.ret.copy(expr = ret),
           block.span

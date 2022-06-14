@@ -11,24 +11,27 @@ import microc.cfg.Cfg.CfgNode
 class SignAnalysis(decls: Declarations, cfg: Cfg.Interprocedural)
   extends DataFlowAnalysis.Builder(SignAnalysis.signLat)(decls, cfg)
   with FixpointComputation.Naive {
-  def eval(env: AbstractEnv, expr: Expr): AbstractValue = expr match {
-    case ast.Null(_) => ???
-    case ast.Number(n, _) => FlatLat.Mid(signOf(n))
-    case Identifier(name, _) => ???
-    case BinaryOp(operator, left, right, _) =>
-      def resolve(expr: Expr): AbstractValue = expr match {
-        case id: Identifier => env(decls(id)._2)
-        case ast.Number(k, _) => FlatLat.Mid(signOf(k))
-        case _ => throw new IllegalStateException()
-      }
-      SignAnalysis.opTable(operator)((resolve(left), resolve(right)))
-    case CallFuncExpr(targetFun, args, _) => ???
-    case Input(_) => ???
-    case Alloc(expr, _) => ???
-    case VarRef(id, _) => ???
-    case Deref(pointer, _) => ???
-    case ast.Record(fields, _) => ???
-    case FieldAccess(record, field, _) => ???
+  def eval(env: AbstractEnv, expr: Expr): AbstractValue = {
+    def ⊤ = Lattice.⊤[AbstractValue]
+    expr match {
+      case _: ast.Null => ⊤
+      case ast.Number(n, _) => FlatLat.Mid(signOf(n))
+      case id: Identifier => env(decls(id)._2)
+      case BinaryOp(operator, left, right, _) =>
+        def resolve(expr: Expr): AbstractValue = expr match {
+          case id: Identifier => env(decls(id)._2)
+          case ast.Number(k, _) => FlatLat.Mid(signOf(k))
+          case _ => throw new IllegalStateException()
+        }
+        SignAnalysis.opTable(operator)((resolve(left), resolve(right)))
+      case _: CallFuncExpr => ⊤
+      case _: Input => ⊤
+      case _: Alloc => ⊤
+      case _: VarRef => ⊤
+      case _: Deref => ⊤
+      case _: ast.Record => ⊤
+      case _: FieldAccess => ⊤
+    }
   }
 
   override def transfer(node: CfgNode, env: AbstractEnv): AbstractEnv = node match {
