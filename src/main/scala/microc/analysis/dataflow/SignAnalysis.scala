@@ -103,9 +103,9 @@ object SignAnalysis {
         case FlatLat.Bot() => "2"
       }.map(Some(_))
       val formatted = keys.map(a => keys.map(b => (a, b) match {
-        case (None, None) => io.AnsiColor.BOLD + io.AnsiColor.GREEN + ("%3s" formatted op.toString) + io.AnsiColor.RESET
-        case (Some(l), Some(r)) => "%3s" formatted showFlatLat(table((l, r)))
-        case (ml, mr) => io.AnsiColor.RED + ("%3s" formatted showFlatLat(ml.orElse(mr).get)) + io.AnsiColor.RESET
+        case (None, None) => io.AnsiColor.BOLD + io.AnsiColor.GREEN + f"$op%3s" + io.AnsiColor.RESET
+        case (Some(l), Some(r)) => f"${showFlatLat(table((l, r)))}%3s"
+        case (ml, mr) => io.AnsiColor.RED + f"${showFlatLat(ml.orElse(mr).get)}%3s" + io.AnsiColor.RESET
       }) mkString " ")
       formatted.mkString("\n")
     }).mkString("\n\n")

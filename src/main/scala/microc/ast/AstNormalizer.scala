@@ -12,7 +12,7 @@ object AstNormalizer {
 
   def compare(orig: Program, normalized: Program): String = {
     val after = ("normalized\n" + normalized.toString).linesIterator.toList
-    val before = LazyList.from(("original\n" + orig.toString).linesIterator).padTo(after.length, "").map("%-30s".formatted(_))
+    val before = LazyList.from(("original\n" + orig.toString).linesIterator).padTo(after.length, "").map(s => f"$s%-30s")
     (before zip after).map(_.productIterator.mkString).mkString("\n")
   }
 
