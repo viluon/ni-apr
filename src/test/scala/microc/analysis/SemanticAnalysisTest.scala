@@ -17,8 +17,8 @@ class SemanticAnalysisTest extends FunSuite with Parsing {
     )
 
     assertEquals(ds.size, 2)
-    assertEquals(ds(Identifier("x", Span(Loc(4, 4), Loc(4, 4)))), IdentifierDecl("x", Span(Loc(3, 8), Loc(3, 8))))
-    assertEquals(ds(Identifier("x", Span(Loc(5, 11), Loc(5, 11)))), IdentifierDecl("x", Span(Loc(3, 8), Loc(3, 8))))
+    assertEquals(ds(Identifier("x", Span(Loc(4, 4), Loc(4, 4))))._2, IdentifierDecl("x", Span(Loc(3, 8), Loc(3, 8))))
+    assertEquals(ds(Identifier("x", Span(Loc(5, 11), Loc(5, 11))))._2, IdentifierDecl("x", Span(Loc(3, 8), Loc(3, 8))))
   }
 
   test("Identifier redefinition (function, function)") {

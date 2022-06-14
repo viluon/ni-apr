@@ -30,8 +30,8 @@ case class SemanticException(errors: List[SemanticError]) extends ProgramExcepti
   *
   */
 class SemanticAnalysis {
-  type Env = Map[String, Decl]
-  case class AnalyserSate(env: Env, decls: Declarations, fieldNames: Set[String])
+  type Env = Map[String, (Option[FunDecl], Decl)]
+  case class AnalyserSate(fn: Option[FunDecl], env: Env, decls: Declarations, fieldNames: Set[String])
   type Analysis[A] = ErrorState[List[SemanticError], AnalyserSate, A]
 
   // help type inference
@@ -41,6 +41,8 @@ class SemanticAnalysis {
   private def put(s: AnalyserSate): Analysis[Unit] = _put(s)
 
   private def env: Analysis[Env] = get.map(_.env)
+  private def getFn: Analysis[Option[FunDecl]] = get.map(_.fn)
+  private def setFn(fn: FunDecl): Analysis[Unit] = get.flatMap(s => put(s.copy(fn = Some(fn))))
   private def setEnv(e: Env): Analysis[Unit] = get.flatMap(s => put(s.copy(env = e)))
   private def declarations(d: Declarations): Analysis[Unit] = get.flatMap(s => put(s.copy(decls = d)))
 
@@ -50,9 +52,9 @@ class SemanticAnalysis {
   }
 
   def combine(saved: Env, e: Iterable[(String, Decl)]): Analysis[Env] = e.foldLeft(pure(saved)) {
-    case (ctx, kv@(name, decl)) => ctx.flatMap(acc => acc.get(name) match {
-      case Some(previousDecl) => crash(s"redeclaration of ${decl.name}, previously declared at ${previousDecl.span}", decl.span)
-      case None => pure(acc + kv)
+    case (ctx, (name, decl)) => ctx.flatMap(acc => acc.get(name) match {
+      case Some((_, previousDecl)) => crash(s"redeclaration of ${decl.name}, previously declared at ${previousDecl.span}", decl.span)
+      case None => getFn.flatMap(fn => pure(acc + (name -> (fn, decl))))
     })
   }
 
@@ -70,7 +72,7 @@ class SemanticAnalysis {
     * @return The resolved references of all identifiers in the program.
     *         The map's values are a subset of all program declarations, e.g. main() is often missing.
     */
-  def analyze(program: Program): (Declarations, Set[String]) = go(program)(AnalyserSate(Map(), Map(), Set())) match {
+  def analyze(program: Program): (Declarations, Set[String]) = go(program)(AnalyserSate(None, Map(), Map(), Set())) match {
     case Left(errs) => throw SemanticException(errs)
     case Right((_, state)) => (state.decls, state.fieldNames)
   }
@@ -79,10 +81,10 @@ class SemanticAnalysis {
     fnDecls <- combine(Map(), program.funs.map(f => (f.name, f: Decl)))
     () <- setEnv(fnDecls)
     () <- reduce(program.funs) { decl =>
-      inScope(decl.params.map(id => (id.name, id: Decl)))(for {
+      setFn(decl).flatMap(_ => inScope(decl.params.map(id => (id.name, id: Decl)))(for {
         () <- debug(s"function ${decl.name}")
         () <- go(decl.block)
-      } yield ())
+      } yield ()))
     }
   } yield ()
 
@@ -91,7 +93,7 @@ class SemanticAnalysis {
     case ast.Null(_) => pure(false)
     case ast.Number(_, _) => pure(false)
     case Identifier(name, _) => env.flatMap(_.get(name) match {
-      case Some(_: FunDecl) => crash(s"cannot assign to a function", expr.span)
+      case Some((_, _: FunDecl)) => crash(s"cannot assign to a function", expr.span)
       // not handling unbound identifiers here, regular analysis should catch those
       case _ => pure(true)
     })
@@ -111,8 +113,8 @@ class SemanticAnalysis {
   private def go(stmt: Stmt): Analysis[Unit] = stmt match {
     case block: StmtInNestedBlock => block match {
       case AssignStmt(id: Identifier, right, span) => env.flatMap(_.get(id.name) match {
-        case Some(_: IdentifierDecl) => go(id).flatMap(_ => go(right))
-        case Some(_: FunDecl) => crash("cannot assign to a function", span.highlighting(id.span))
+        case Some((_, _: IdentifierDecl)) => go(id).flatMap(_ => go(right))
+        case Some((_, _: FunDecl)) => crash("cannot assign to a function", span.highlighting(id.span))
         case None => go(id) // this call will crash and take care of the error message
       })
       case AssignStmt(left, right, span) => for {
@@ -144,10 +146,10 @@ class SemanticAnalysis {
     case ast.Null(_) => debug("expr")
     case ast.Number(_, _) => debug("expr")
     case id@Identifier(name, span) => env.flatMap(_.get(name) match {
-      case Some(decl) => for {
+      case Some((maybeFn, decl)) => for {
         _ <- debug("expr")
         s <- get
-        _ <- put(s.copy(decls = s.decls + (id -> decl)))
+        _ <- put(s.copy(decls = s.decls + (id -> (maybeFn, decl))))
       } yield ()
       case None => crash(s"undefined reference to $name", span)
     })

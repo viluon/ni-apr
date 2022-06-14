@@ -17,7 +17,7 @@ package object ast {
       * @param declarations a set of declaration to use for the lookup
       * @return identifier's declaration
       */
-    def declaration(implicit declarations: Declarations): Decl = declarations(that)
+    def declaration(implicit declarations: Declarations): Decl = declarations(that)._2
   }
 
   /**

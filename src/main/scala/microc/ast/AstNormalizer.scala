@@ -43,8 +43,9 @@ object AstNormalizer {
             "normalization wrote a statement for which variable extraction logic isn't implemented"
           )
         })
+        tmpVarStmtLoc = originalStmts.headOption.map(_.span).getOrElse(block.span).from
         body = FunBlockStmt(
-          block.vars :+ VarStmt(newVars, Span.invalid),
+          block.vars :+ VarStmt(newVars, Span(tmpVarStmtLoc, tmpVarStmtLoc)),
           result._1.filter(_._1).map(_._2) ++ originalStmts,
           block.ret.copy(expr = ret),
           block.span

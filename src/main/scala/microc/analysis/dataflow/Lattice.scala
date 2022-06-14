@@ -70,13 +70,12 @@ object Lattice {
     }
   }
 
-  def mapLat[A, B](s: Iterable[A], l: Lattice[B]): Lattice[Map[A, B]] = new Lattice[Map[A, B]] {
-    private implicit def lat: Lattice[B] = l
-    override val top: Map[A, B] = s.map(_ -> l.top).toMap
-    override val bot: Map[A, B] = s.map(_ -> l.bot).toMap
-    override def lub(a: Map[A, B], b: Map[A, B]): Map[A, B] = a.transform((k, x) => x ⊔ b(k))
-    override def glb(a: Map[A, B], b: Map[A, B]): Map[A, B] = a.transform((k, x) => x ⊓ b(k))
-    override def leq(a: Map[A, B], b: Map[A, B]): Boolean = a.forall { case (k, x) => x ⊑ b(k) }
+  def mapLat[A, B](s: Iterable[A], l: A => Lattice[B]): Lattice[Map[A, B]] = new Lattice[Map[A, B]] {
+    override val top: Map[A, B] = s.map(a => a -> l(a).top).toMap
+    override val bot: Map[A, B] = s.map(a => a -> l(a).bot).toMap
+    override def lub(a: Map[A, B], b: Map[A, B]): Map[A, B] = a.transform((k, x) => l(k).lub(x, b(k)))
+    override def glb(a: Map[A, B], b: Map[A, B]): Map[A, B] = a.transform((k, x) => l(k).glb(x, b(k)))
+    override def leq(a: Map[A, B], b: Map[A, B]): Boolean = a.forall { case (k, x) => l(k).leq(x, b(k)) }
   }
 
   sealed trait LiftLat[A]

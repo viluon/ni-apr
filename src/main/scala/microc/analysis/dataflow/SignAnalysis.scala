@@ -17,7 +17,7 @@ class SignAnalysis(decls: Declarations, cfg: Cfg.Interprocedural)
     case Identifier(name, _) => ???
     case BinaryOp(operator, left, right, _) =>
       def resolve(expr: Expr): AbstractValue = expr match {
-        case id: Identifier => env(decls(id))
+        case id: Identifier => env(decls(id)._2)
         case ast.Number(k, _) => FlatLat.Mid(signOf(k))
         case _ => throw new IllegalStateException()
       }
@@ -34,7 +34,7 @@ class SignAnalysis(decls: Declarations, cfg: Cfg.Interprocedural)
   override def transfer(node: CfgNode, env: AbstractEnv): AbstractEnv = node match {
     case Right(VarStmt(ids, _)) => ids.foldLeft(env)((acc, id) => acc.updated(id, vLat.bot))
     case Right(AssignStmt(DirectWrite(id, _), rhs, _)) =>
-      env.updated(decls(id), env(decls(id)) ⊔ eval(env, rhs))
+      env.updated(decls(id)._2, env(decls(id)._2) ⊔ eval(env, rhs))
     case _ => env
   }
 }

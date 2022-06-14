@@ -2,8 +2,8 @@ package microc.cli
 
 import microc.ProgramException
 import microc.analysis.dataflow.{ConstantAnalysis, DataFlowAnalysis, FixpointComputation, SignAnalysis}
-import microc.analysis.{SemanticAnalysis, TypeAnalysis}
-import microc.ast.{AstNormalizer, Decl, Identifier, JSONAstPrinter}
+import microc.analysis.{Declarations, SemanticAnalysis, TypeAnalysis}
+import microc.ast.{AstNormalizer, JSONAstPrinter}
 import microc.cfg.Cfg
 import microc.interpreter.BasicInterpreter
 import microc.parser.Parser
@@ -209,7 +209,7 @@ case class CfgAction(file: File, parserName: String = Parser.DefaultParserName)
 abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
   extends Action with ParsingAction {
 
-  protected def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation
+  protected def analysis(decls: Declarations, cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation
   def file: File
 
   override def run(): Int = {
@@ -224,7 +224,7 @@ abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
       val (declarations, fieldNames) = new SemanticAnalysis().analyze(normalized)
       val cfg = Cfg.convert(normalized)
       val ana = analysis(declarations, cfg)
-      val result = ana.fixpoint(cfg, ana.programLat.bot)
+      val result = ana.fixpoint()
       println(cfg.toDot(result.values.flatMap(fn => fn.view.mapValues(env =>
         "\\n" + env.map(p => p._1.name + ": " + p._2).toList.sorted.mkString("{", ",", "}")
       )).toMap, declarations))
@@ -238,12 +238,12 @@ abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
 }
 
 case class SignAction(file: File) extends AnalyseAction() {
-  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
+  override def analysis(decls: Declarations, cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
     new SignAnalysis(decls, cfg)
 }
 
 case class ConstAction(file: File) extends AnalyseAction() {
-  override def analysis(decls: Map[Identifier, Decl], cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
+  override def analysis(decls: Declarations, cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
     new ConstantAnalysis(decls, cfg)
 }
 

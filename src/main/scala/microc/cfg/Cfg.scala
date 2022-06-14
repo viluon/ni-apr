@@ -131,7 +131,7 @@ object Cfg {
         nodes.addOne(name(node) + s"[label=\"$label\"]")
         node match {
           case Right(AssignStmt(_, CallFuncExpr(fn: Identifier, _, _), _)) =>
-            val decl = decls(fn).asInstanceOf[FunDecl]
+            val decl = decls(fn)._2.asInstanceOf[FunDecl]
             edges addOne (name(node) + ":ne", name(Left(Source(decl))) + ":n", "[constraint=false, color=lightslateblue]")
             edges addOne (name(Left(Sink(decl))) + ":s", name(node) + ":se", "[constraint=false, color=deeppink]")
           case _ => ()

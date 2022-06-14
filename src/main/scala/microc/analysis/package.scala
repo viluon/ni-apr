@@ -1,9 +1,9 @@
 package microc
 
-import microc.ast.{Decl, Identifier}
+import microc.ast.{Decl, FunDecl, Identifier}
 
 package object analysis {
 
-  type Declarations = Map[Identifier, Decl]
+  type Declarations = Map[Identifier, (Option[FunDecl], Decl)]
 
 }

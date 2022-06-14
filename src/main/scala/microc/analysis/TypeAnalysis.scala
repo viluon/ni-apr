@@ -46,7 +46,7 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
   type Analysis[A] = WriterState[List[TypeError], TAState, A]
 
   def fresh(expr: AstNode): Analysis[Type] = expr match {
-    case id: Identifier => fresh(declarations(id))
+    case id: Identifier => fresh(declarations(id)._2)
     case _ => s =>
       s.typeVars.get(expr) match {
         case Some(n) => (Nil, s, Type.Var(n))
