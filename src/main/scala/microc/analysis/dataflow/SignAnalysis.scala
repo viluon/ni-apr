@@ -12,7 +12,7 @@ class SignAnalysis(decls: Declarations, cfg: Cfg.Interprocedural)
   extends DataFlowAnalysis.Builder(SignAnalysis.signLat)(decls, cfg)
   with FixpointComputation.Naive {
   def eval(env: AbstractEnv, expr: Expr): AbstractValue = {
-    def ⊤ = Lattice.⊤[AbstractValue]
+    val ⊤ = Lattice.⊤[AbstractValue]
     expr match {
       case _: ast.Null => ⊤
       case ast.Number(n, _) => FlatLat.Mid(signOf(n))
@@ -62,38 +62,74 @@ object SignAnalysis {
     case _ if x < 0 => Negative()
   }
 
-  lazy val opTable: Map[BinaryOperator, Map[(FlatLat[Sign], FlatLat[Sign]), FlatLat[Sign]]] = {
-    import microc.analysis.dataflow.Lattice.LatOps
-    implicit val sl: Lattice[FlatLat[Sign]] = signLat
-    val intLat: Lattice[FlatLat[Int]] = Lattice.flatLat
-    def mid(x: Sign): FlatLat[Sign] = FlatLat.Mid(x)
+  val intLat: Lattice[FlatLat[Int]] = Lattice.flatLat
 
+  type SignLat = FlatLat[Sign]
+
+  lazy val opTable: Map[BinaryOperator, Map[(SignLat, SignLat), SignLat]] = {
     val tbl = for {
       op <- BinaryOperator.all.toList
-    } yield op -> {
-      val range = intLat.top :: intLat.bot :: (-2 to 2).toList.map(x => FlatLat.Mid(x))
-      // sample the operator semantics over -2 to 2 and top & bottom in both dimensions
-      val samples = for (l <- range; r <- range) yield (l.map(signOf), r.map(signOf)) -> ((l, r) match {
-        case (FlatLat.Bot(), _) | (_, FlatLat.Bot()) => signLat.bot
-        case (FlatLat.Mid(l), FlatLat.Mid(r)) =>
-          op.eval(l, r) match {
-            case Some(x) => mid(signOf(x))
-            case None => signLat.bot
-          }
-        case (FlatLat.Top(), _) | (_, FlatLat.Top()) => intLat.lub(l, r).map(signOf) // this won't work! the lub is always ⊤
-      })
-      samples.groupMapReduce(_._1 // group by the input signs
-      )(_._2 // use the eval outputs as RHS's
-      )(_ ⊔ _) // and take the least upper bound of all the samples
-      // the above leaves us with a map covering all signs, including top & bottom inputs
-      // e.g. for -, the samples contain Pos - Pos = Pos (2 - 1 = 1) but also Pos - Pos = Neg (1 - 2 = -1),
-      // therefore, (Pos, Pos) will map to Top (least upper bound of the individual outputs).
-    }
-
+    } yield op -> tableForOp(op)
     tbl.toMap
   }
 
-  def renderTables(tbl: Map[BinaryOperator, Map[(FlatLat[Sign], FlatLat[Sign]), FlatLat[Sign]]]): String = {
+  private def tableForOp(op: BinaryOperator): Map[(SignLat, SignLat), SignLat] = {
+    implicit val sl: Lattice[SignLat] = signLat
+    // sample the operator semantics over -2 to 2 in both dimensions
+    val range = (-2 to 2).toList.map(x => FlatLat.Mid(x))
+    val samples = for (l <- range; r <- range) yield (l.map(signOf), r.map(signOf)) -> ((l, r) match {
+      case (FlatLat.Mid(l), FlatLat.Mid(r)) =>
+        op.eval(l, r) match {
+          case Some(x) => FlatLat.Mid(signOf(x))
+          case None => signLat.bot
+        }
+    })
+
+    extendWithExtremes(range, lubOverSamples(samples))
+  }
+
+  /**
+    * Create an abstract lookup table from a collection of samples by grouping them by keys and taking the least upper
+    * bound of their values.
+    */
+  private def lubOverSamples[K, A](samples: List[(K, A)])(implicit lat: Lattice[A]): Map[K, A] = {
+    samples.groupMapReduce(_._1 // group by the input signs
+    )(_._2 // use the eval outputs as RHS's
+    )((l, r) => lat.lub(l, r)) // and take the least upper bound of all the samples
+    // the above leaves us with a map covering all signs, including top & bottom inputs
+    // e.g. for -, the samples contain Pos - Pos = Pos (2 - 1 = 1) but also Pos - Pos = Neg (1 - 2 = -1),
+    // therefore, (Pos, Pos) will map to Top (least upper bound of the individual outputs).
+  }
+
+  /**
+    * Take a table of abstract values at integer points and extend it to the entire abstract domain.
+    *
+    * Tops map to the least upper bound of all existing samples for the given input, bottoms map simply to bottom.
+    *
+    * @param range The range of integers over which the operator was sampled
+    * @param midTable The table of abstract values of the operator at concrete points (neither ⊤ nor ⊥)
+    */
+  private def extendWithExtremes(range: List[FlatLat.Mid[Int]], midTable: Map[(SignLat, SignLat), SignLat]) = {
+    implicit val sl: Lattice[SignLat] = signLat
+
+    def getAxisForInput(selector: ((SignLat, SignLat)) => SignLat, input: FlatLat[Int]): SignLat = {
+      val set = midTable.filter(p => selector(p._1) == input.map(signOf)).values.toSet
+      set.reduceOption(_ ⊔ _).getOrElse(signLat.top)
+    }
+
+    val extremes = List(intLat.top, intLat.bot)
+    midTable ++ lubOverSamples(
+      for (a <- range ++ extremes; b <- extremes; (l, r) <- List((a, b), (b, a)))
+        yield (l.map(signOf), r.map(signOf)) -> ((l, r) match {
+          case (FlatLat.Bot(), _) | (_, FlatLat.Bot()) => signLat.bot
+          case (lx@FlatLat.Mid(_), FlatLat.Top()) => getAxisForInput(_._1, lx)
+          case (FlatLat.Top(), ly@FlatLat.Mid(_)) => getAxisForInput(_._2, ly)
+          case (x, y) => x.map(signOf) ⊔ y.map(signOf)
+        })
+      )
+  }
+
+  def renderTables(tbl: Map[BinaryOperator, Map[(SignLat, SignLat), SignLat]]): String = {
     def showFlatLat[A](x: FlatLat[A]): String = x match {
       case FlatLat.Mid(x) => x.toString
       case other => other.toString
