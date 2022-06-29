@@ -75,13 +75,13 @@ class PCParser extends StringParsers with microc.parser.Parser {
 
   lazy val UnaryExpr: Parser[ast.Expr] = Deref | Ref | Input | Alloc | Null | PostfixExpr
 
-  lazy val MultiplicativeExpr: Parser[ast.Expr] = chainl1(UnaryExpr, binaryOp(ast.Times) | binaryOp(ast.Divide))
+  lazy val MultiplicativeExpr: Parser[ast.Expr] = chainl1(UnaryExpr, binaryOp(ast.Times()) | binaryOp(ast.Divide()))
 
-  lazy val AdditiveExpr: Parser[ast.Expr] = chainl1(MultiplicativeExpr, binaryOp(ast.Plus) | binaryOp(ast.Minus))
+  lazy val AdditiveExpr: Parser[ast.Expr] = chainl1(MultiplicativeExpr, binaryOp(ast.Plus()) | binaryOp(ast.Minus()))
 
-  lazy val RelationalExpr: Parser[ast.Expr] = chainl1(AdditiveExpr, binaryOp(ast.GreaterThan))
+  lazy val RelationalExpr: Parser[ast.Expr] = chainl1(AdditiveExpr, binaryOp(ast.GreaterThan()))
 
-  lazy val EqualityExpr: Parser[ast.Expr] = chainl1(RelationalExpr, binaryOp(ast.Equal)) label "EqualityExpr"
+  lazy val EqualityExpr: Parser[ast.Expr] = chainl1(RelationalExpr, binaryOp(ast.Equal())) label "EqualityExpr"
 
   lazy val Expr: Parser[ast.Expr] = EqualityExpr withMessage (_ => "expected expression") label "Expr"
 

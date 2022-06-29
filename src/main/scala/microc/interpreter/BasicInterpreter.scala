@@ -103,7 +103,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     }
 
     def findId(id: Identifier, span: Span): Context[Int] = declarations.get(id) match {
-      case Some(idDecl: IdentifierDecl) => env.flatMap(_.get(idDecl) match {
+      case Some((_, idDecl: IdentifierDecl)) => env.flatMap(_.get(idDecl) match {
         case Some(addr) => pure(addr)
         case None => crash(s"undefined reference to $id", span)
       })
@@ -176,7 +176,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
   def eval(expr: Expr): Context[Value] = expr match {
     case Null(_) => pure(NullVal)
     case Number(value, _) => pure(IntVal(value))
-    case id@Identifier(_, span) => lookup(declarations(id)).flatMap {
+    case id@Identifier(_, span) => lookup(declarations(id)._2).flatMap {
       case Some(v) => pure(v)
       case None => crash(s"undefined variable $id", span)
     }
@@ -187,7 +187,7 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
       catch { case _: java.io.IOException => NullVal }
     )
     case Alloc(expr, _) => for (v <- eval(expr); addr <- alloc(v)) yield AddrVal(addr)
-    case VarRef(id, _) => for (e <- env) yield declarations(id) match {
+    case VarRef(id, _) => for (e <- env) yield declarations(id)._2 match {
       case id: IdentifierDecl => AddrVal(e(id))
       case fn: FunDecl => FunAddrVal(fn) // FIXME should be illegal
     }
@@ -240,18 +240,13 @@ class BasicInterpreter(program: Program, declarations: Declarations, reader: Rea
     val span = left.span ++ right.span
     for (lv <- eval(left); rv <- eval(right))
       yield (lv, rv) match {
-        case (IntVal(l), IntVal(r)) =>
-          pure(IntVal(operator match {
-            case Plus => l + r
-            case Minus => l - r
-            case Times => l * r
-            case Divide => l / r
-            case Equal => if (l == r) 1 else 0
-            case GreaterThan => if (l > r) 1 else 0
-          }))
+        case (IntVal(l), IntVal(r)) => operator.eval(l, r) match {
+          case Some(x) => pure(IntVal(x))
+          case None => crash(s"division by zero", span)
+        }
         case (x@(NullVal | AddrVal(_) | FunAddrVal(_)), y@(NullVal | AddrVal(_) | FunAddrVal(_)))
-          if operator == Equal => pure(IntVal(if (x == y) 1 else 0))
-        case (x, y) if operator == Equal =>
+          if operator == Equal() => pure(IntVal(if (x == y) 1 else 0))
+        case (x, y) if operator == Equal() =>
           crash(s"operator $operator expected two integers or two pointers, got $x and $y", span)
         case (IntVal(_), problem) =>
           crash(s"operator $operator expected int, got $problem", span.highlighting(right.span))

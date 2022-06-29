@@ -1,8 +1,10 @@
 package microc.cli
 
 import microc.ProgramException
-import microc.analysis.{SemanticAnalysis, TypeAnalysis}
-import microc.ast.JSONAstPrinter
+import microc.analysis.dataflow.{ConstantAnalysis, DataFlowAnalysis, FixpointComputation, SignAnalysis}
+import microc.analysis.{Declarations, SemanticAnalysis, TypeAnalysis}
+import microc.ast.{AstNormalizer, JSONAstPrinter}
+import microc.cfg.Cfg
 import microc.interpreter.BasicInterpreter
 import microc.parser.Parser
 import microc.util.CharacterSets.NL
@@ -29,13 +31,24 @@ case object PrintHelpAction extends Action {
          |    --indent NUM         indent the result by NUM (default: no indent)
          |    --parser NAME        specify parser which parser to use
          |    --output FILE        specify the output file
-         |  
+         |
          |  run [options] FILE     runs the microC program in FILE
-         |    
+         |
          |    options:
          |    --ascii              convert input/output to/from ASCII codes
          |    --output             consider the return from main as output
          |    --parser NAME        specify parser which parser to use
+         |
+         |  type FILE              typechecks FILE
+         |
+         |  cfg FILE               exports the control flow graph of FILE to DOT
+         |
+         |  sign FILE              performs sign analysis on FILE
+         |
+         |  show-sign-tables       visualise the transfer function lookup tables
+         |                         used for sign analysis
+         |
+         |  const FILE             performs constant analysis on FILE
          |""".stripMargin)
     0
   }
@@ -167,5 +180,76 @@ case class TypeAction(file: File,
         System.err.println(e.format(reporter))
         1
     }
+  }
+}
+
+case class CfgAction(file: File, parserName: String = Parser.DefaultParserName)
+  extends Action with ParsingAction {
+  override def run(): Int = {
+    val source = readInput(file)
+    val reporter = new Reporter(source, Some(file.getPath))
+
+    try {
+      val program = parser.parseProgram(source)
+      // NB: normalization must happen before semantic analysis, otherwise conversion to CFG produces garbage
+      val normalized = AstNormalizer.normalize(program)
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(normalized)
+      // TODO type analysis too
+      val cfg = Cfg.convert(normalized)
+      println(cfg.toDot(declarations))
+      0
+    } catch {
+      case e: ProgramException =>
+        System.err.println(e.format(reporter))
+        1
+    }
+  }
+}
+
+abstract class AnalyseAction(val parserName: String = Parser.DefaultParserName)
+  extends Action with ParsingAction {
+
+  protected def analysis(decls: Declarations, cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation
+  def file: File
+
+  override def run(): Int = {
+    val source = readInput(file)
+    val reporter = new Reporter(source, Some(file.getPath))
+
+    try {
+      val program = parser.parseProgram(source)
+      // TODO type analysis too
+      val normalized = AstNormalizer.normalize(program)
+      System.err.println(AstNormalizer.compare(program, normalized))
+      val (declarations, fieldNames) = new SemanticAnalysis().analyze(normalized)
+      val cfg = Cfg.convert(normalized)
+      val ana = analysis(declarations, cfg)
+      val result = ana.fixpoint()
+      println(cfg.toDot(result.values.flatMap(fn => fn.view.mapValues(env =>
+        "\\n" + env.map(p => p._1.name + ": " + p._2).toList.sorted.mkString("{", ",", "}")
+      )).toMap, declarations))
+      0
+    } catch {
+      case e: ProgramException =>
+        System.err.println(e.format(reporter))
+        1
+    }
+  }
+}
+
+case class SignAction(file: File) extends AnalyseAction() {
+  override def analysis(decls: Declarations, cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
+    new SignAnalysis(decls, cfg)
+}
+
+case class ConstAction(file: File) extends AnalyseAction() {
+  override def analysis(decls: Declarations, cfg: Cfg.Interprocedural): DataFlowAnalysis with FixpointComputation =
+    new ConstantAnalysis(decls, cfg)
+}
+
+case class ShowSignTablesAction() extends Action {
+  override def run(): Int = {
+    println(SignAnalysis.renderTables(SignAnalysis.opTable))
+    0
   }
 }

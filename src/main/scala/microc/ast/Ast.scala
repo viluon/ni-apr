@@ -1,5 +1,7 @@
 package microc.ast
 
+import microc.util.ReflectionHelpers
+
 /**
   * A source code location of an AST node.
   *
@@ -13,6 +15,10 @@ case class Loc(line: Int, col: Int) extends Ordered[Loc] {
     val d = this.line - that.line
     if (d == 0) this.col - that.col else d
   }
+}
+
+object Loc {
+  val invalid = Loc(-1, -1)
 }
 
 case class Span(from: Loc, to: Loc, highlight: Option[Span] = None) extends Ordered[Span] {
@@ -35,41 +41,59 @@ case class Span(from: Loc, to: Loc, highlight: Option[Span] = None) extends Orde
   def highlighting(hl: Span): Span = copy(highlight = Some(hl))
 }
 
-/** A binary operator */
-sealed trait BinaryOperator
+object Span {
+  val invalid: Span = Span(Loc.invalid, Loc.invalid)
+}
 
-object BinaryOperator {
-  def apply(s: String): BinaryOperator = s match {
-    case "+"  => Plus
-    case "-"  => Minus
-    case "*"  => Times
-    case "/"  => Divide
-    case "==" => Equal
-    case ">"  => GreaterThan
+/** A binary operator */
+sealed trait BinaryOperator {
+  def eval(l: Int, r: Int): Option[Int] = this match {
+    case Plus() => Some(l + r)
+    case Minus() => Some(l - r)
+    case Times() => Some(l * r)
+    case Divide() => if (r == 0) None else Some(l / r)
+    case Equal() => Some(if (l == r) 1 else 0)
+    case GreaterThan() => Some(if (l > r) 1 else 0)
   }
 }
 
-case object Plus extends BinaryOperator {
+object BinaryOperator {
+  lazy val all: Set[BinaryOperator] = reflect.runtime.universe
+    .typeOf[BinaryOperator].typeSymbol.asClass.knownDirectSubclasses
+    .map(op => new ReflectionHelpers.CaseClassFactory(op.asType.toType))
+    .map(_.buildWith(Seq()).asInstanceOf[BinaryOperator])
+
+  def apply(s: String): BinaryOperator = s match {
+    case "+"  => Plus()
+    case "-"  => Minus()
+    case "*"  => Times()
+    case "/"  => Divide()
+    case "==" => Equal()
+    case ">"  => GreaterThan()
+  }
+}
+
+case class Plus() extends BinaryOperator {
   override def toString: String = "+"
 }
 
-case object Minus extends BinaryOperator {
+case class Minus() extends BinaryOperator {
   override def toString: String = "-"
 }
 
-case object Times extends BinaryOperator {
+case class Times() extends BinaryOperator {
   override def toString: String = "*"
 }
 
-case object Divide extends BinaryOperator {
+case class Divide() extends BinaryOperator {
   override def toString: String = "/"
 }
 
-case object Equal extends BinaryOperator {
+case class Equal() extends BinaryOperator {
   override def toString: String = "=="
 }
 
-case object GreaterThan extends BinaryOperator {
+case class GreaterThan() extends BinaryOperator {
   override def toString: String = ">"
 }
 

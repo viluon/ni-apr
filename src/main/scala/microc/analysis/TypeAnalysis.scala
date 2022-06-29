@@ -46,7 +46,7 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
   type Analysis[A] = WriterState[List[TypeError], TAState, A]
 
   def fresh(expr: AstNode): Analysis[Type] = expr match {
-    case id: Identifier => fresh(declarations(id))
+    case id: Identifier => fresh(declarations(id)._2)
     case _ => s =>
       s.typeVars.get(expr) match {
         case Some(n) => (Nil, s, Type.Var(n))
@@ -102,7 +102,7 @@ case class TypeAnalysis(declarations: Declarations, fieldNames: Set[String]) {
       _left_ <- go(left);
       _right_ <- go(right);
       () <- unify(_left_, _right_, s);
-      () <- if (op == Equal) unify(_right_, _expr_, s) else pure(()): Analysis[Unit];
+      () <- if (op == Equal()) unify(_right_, _expr_, s) else pure(()): Analysis[Unit];
       () <- unify(_expr_, Type.Int, s)
     ) yield ()
     case CallFuncExpr(targetFun, args, s) => for (
